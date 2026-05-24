@@ -1,0 +1,3 @@
+<!-- PLACEHOLDER -->
+
+The hauntology lens (content variant) reads the meme as a haunted object. What ghosts of older cultural forms, dead futures, or unmournable losses does it carry? What is being re-animated, and what does the re-animation reveal about what was killed? Many memes are explicitly anachronistic — they pastiche Renaissance paintings, medieval marginalia, Soviet posters, 90s sitcoms. Fisher on the slow cancellation of the future, Derrida on the spectral logic of inheritance, Boym's distinction between restorative and reflective nostalgia, Benjamin's angel of history — these are the moves. The lens takes meme nostalgia structurally rather than dismissively.

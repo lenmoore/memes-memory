@@ -1,0 +1,3 @@
+<!-- PLACEHOLDER -->
+
+The anthropological lens reads the meme as a ritual object circulating in a kinship structure. Who is bound to whom by sharing this? What gift is being exchanged? What rite of passage or boundary marker is being performed? A meme is, in Mauss's sense, almost exactly a gift — circulated to create and maintain social bonds, carrying obligations of reciprocity, generating prestige through display. The in-group / out-group structure of memes (you get it or you don't) is a kinship-marker function. Turner on liminality and communitas, Lévi-Strauss on kinship structure, Mary Douglas on purity and transgression — these are the moves.

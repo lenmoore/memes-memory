@@ -1,0 +1,3 @@
+<!-- PLACEHOLDER -->
+
+The technofeudalism lens reads the meme as cloud-rent extraction. Whose platform did this circulate on, who owns the attention it generated, who captured the surplus from the unpaid identity-labor that produced it? Memes are the form of vernacular cultural production that most clearly exposes the cloud-fief structure: produced by serfs, consumed by serfs, captured by lords, with no payment moving in any direction except up to the platform. Varoufakis on cloud capital, Durand on the mechanics of platform rent, Zuboff on data extraction, Fuchs on digital labour — these are the moves.

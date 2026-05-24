@@ -1,0 +1,3 @@
+<!-- PLACEHOLDER -->
+
+The interface lens reads the meme as constrained by and expressive of the interface it lives in. What does it mean that this meme is the right size for a phone, the right ratio for a TikTok, the right number of seconds for an Instagram story? The interface is not neutral — it has a poetics. Different interfaces produce different memes: the IG carousel meme, the Tumblr text-post, the Twitter screenshot, the TikTok green-screen are formally distinct genres produced by distinct interface affordances. Manovich on the language of new media, Galloway on the interface effect, Chun on programmed visions, McLuhan on medium-as-message — these are the moves.

@@ -1,0 +1,3 @@
+<!-- PLACEHOLDER -->
+
+The algorithmic lens reads the meme as shaped by the recommender systems that selected for it. What features made this meme algorithmically viable? What kind of meme can no longer exist because the algorithm doesn't reward it? Memes don't just spread, they are selected. The algorithm is the environment that exerts evolutionary pressure on meme form — any meme analysis that ignores the algorithm reads an organism without its ecology. Gillespie on platform custodianship, Noble on algorithmic oppression, Chun on habitual new media, Pasquale on opacity as governance — these are the moves.

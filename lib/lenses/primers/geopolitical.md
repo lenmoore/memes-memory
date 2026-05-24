@@ -1,0 +1,3 @@
+<!-- PLACEHOLDER -->
+
+The geopolitical / postcolonial / military lens reads the meme as embedded in geopolitical conflict, asymmetric power, and the politics of who gets to speak, be visible, be mourned in a global media order. Diasporic memes are constitutively geopolitical — they are how displaced people narrate their displacement back to themselves and to a world audience. Said on orientalism, Mbembe on necropolitics, Butler on grievable life, Virilio on the militarization of perception — these are the moves. The lens asks: whose death is grievable, whose is administrable, and how does this meme participate in that distribution.

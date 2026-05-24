@@ -1,0 +1,3 @@
+<!-- PLACEHOLDER -->
+
+The trauma / medical lens reads the meme as a trauma artifact — repetition, displacement, the symptom that speaks what the subject can't — and as a form of collective self-medication. Diasporic memes, war memes, climate-grief memes are classic trauma materials by any clinical or theoretical definition. The meme functions structurally like a symptom: compulsive repetition, displacement onto a smaller object, communal sharing as a low-stakes form of bearing witness. Caruth on belatedness, LaCapra on acting out vs. working through, Berlant on cruel optimism — these are the moves.
