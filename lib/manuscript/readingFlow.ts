@@ -1,4 +1,4 @@
-import type { Embed } from "pretext-flow";
+import type { Embed, FlowLine } from "pretext-flow";
 import type { LensReading, VisualArtifactSide } from "@/lib/lenses/reading";
 
 export const ARTIFACT_IMAGE_WIDTH = 280;
@@ -6,7 +6,7 @@ export const ARTIFACT_IMAGE_HEIGHT = Math.round(
   ARTIFACT_IMAGE_WIDTH * (16 / 9),
 );
 export const ARTIFACT_OUTSET = 80;
-export const ARTIFACT_FLOW_MARGIN = 24;
+export const ARTIFACT_FLOW_MARGIN = 36;
 
 export const TYPEWRITER_CHARS_PER_SECOND = 90;
 export const EMBED_SETTLE_MS = 600;
@@ -73,7 +73,7 @@ export function buildReadingFlow(reading: LensReading): ReadingFlowInput {
       position: {
         type: "flow",
         paragraph: Math.max(0, paragraphs.length - 1),
-        progress: 0.12,
+        progress: Math.min(0.82, 0.12 + artifacts.length * 0.36),
         side: section.side,
       },
       margin: ARTIFACT_FLOW_MARGIN,
@@ -85,10 +85,47 @@ export function buildReadingFlow(reading: LensReading): ReadingFlowInput {
     embeds,
     artifacts,
     boldLines,
-    font: '17px "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif',
+    font: '17px Georgia, "Times New Roman", serif',
     lineHeight: 28,
     paragraphGap: 14,
   };
+}
+
+export function layoutCharacterCount(lines: FlowLine[]): number {
+  return lines.reduce((sum, line) => sum + line.text.length, 0);
+}
+
+export function buildVisibleLines(
+  lines: FlowLine[],
+  revealedChars: number,
+): FlowLine[] {
+  if (revealedChars <= 0) return [];
+
+  let count = 0;
+  const visible: FlowLine[] = [];
+
+  for (const line of lines) {
+    const len = line.text.length;
+    if (len === 0) continue;
+
+    if (count + len <= revealedChars) {
+      visible.push(line);
+      count += len;
+      continue;
+    }
+
+    if (count < revealedChars) {
+      const take = revealedChars - count;
+      visible.push({
+        ...line,
+        text: line.text.slice(0, take),
+        width: (line.width / len) * take,
+      });
+    }
+    break;
+  }
+
+  return visible;
 }
 
 export function truncateFlowText(text: string, maxChars: number): string {

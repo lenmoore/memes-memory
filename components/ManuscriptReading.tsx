@@ -4,8 +4,9 @@ import { flowLayout, type FlowResult } from "pretext-flow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildReadingFlow,
+  buildVisibleLines,
   EMBED_SETTLE_MS,
-  truncateFlowText,
+  layoutCharacterCount,
   TYPEWRITER_CHARS_PER_SECOND,
   visualEmbedFrame,
 } from "@/lib/manuscript/readingFlow";
@@ -45,28 +46,20 @@ function runFlowLayout(
 }
 
 function computeContainerHeight(
-  layouts: Array<FlowResult | null>,
+  layout: FlowResult | null,
   flowInput: ReturnType<typeof buildReadingFlow>,
   sideById: Map<string, "left" | "right">,
-  embedPhases: Record<string, EmbedPhase>,
 ): number {
-  let height = 120;
+  let height = layout?.height ?? 120;
 
-  for (const layout of layouts) {
-    if (layout) height = Math.max(height, layout.height);
-  }
+  if (!layout) return height;
 
   for (const embed of flowInput.embeds) {
-    const phase = embedPhases[embed.id];
-    if (phase !== "visible" && phase !== "inFlow") continue;
-
-    for (const layout of layouts) {
-      const resolved = layout?.embeds.find((item) => item.id === embed.id);
-      if (!resolved) continue;
-      const side = sideById.get(embed.id) ?? "left";
-      const frame = visualEmbedFrame(side, resolved.rect);
-      height = Math.max(height, frame.top + frame.height);
-    }
+    const resolved = layout.embeds.find((item) => item.id === embed.id);
+    if (!resolved) continue;
+    const side = sideById.get(embed.id) ?? "left";
+    const frame = visualEmbedFrame(side, resolved.rect);
+    height = Math.max(height, frame.top + frame.height);
   }
 
   return height;
@@ -86,12 +79,25 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
   const settledRef = useRef(false);
 
   const flowInput = useMemo(() => buildReadingFlow(reading), [reading]);
-  const fullTextLength = flowInput.text.length;
-  const typewriterDone = revealedChars >= fullTextLength;
   const allEmbedIds = useMemo(
     () => new Set(flowInput.embeds.map((embed) => embed.id)),
     [flowInput.embeds],
   );
+
+  const fullLayout = useMemo(
+    () => runFlowLayout(flowInput, columnWidth, flowInput.text, allEmbedIds),
+    [flowInput, columnWidth, allEmbedIds],
+  );
+
+  const layoutCharCount = useMemo(
+    () =>
+      fullLayout
+        ? layoutCharacterCount(fullLayout.lines)
+        : flowInput.text.replace(/\n/g, "").length,
+    [fullLayout, flowInput.text],
+  );
+
+  const typewriterDone = revealedChars >= layoutCharCount;
 
   useEffect(() => {
     settledRef.current = false;
@@ -124,7 +130,7 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
   }, [reading]);
 
   useEffect(() => {
-    if (fullTextLength === 0) return;
+    if (layoutCharCount === 0) return;
 
     let raf = 0;
     let revealed = 0;
@@ -134,7 +140,7 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
       const delta = now - lastTime;
       lastTime = now;
       revealed = Math.min(
-        fullTextLength,
+        layoutCharCount,
         revealed +
           Math.max(
             1,
@@ -142,14 +148,14 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
           ),
       );
       setRevealedChars(revealed);
-      if (revealed < fullTextLength) {
+      if (revealed < layoutCharCount) {
         raf = requestAnimationFrame(tick);
       }
     };
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [fullTextLength, reading]);
+  }, [layoutCharCount, reading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,27 +243,9 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
     };
   }, [flowInput.artifacts, reading]);
 
-  const revealedText = useMemo(
-    () => truncateFlowText(flowInput.text, revealedChars),
-    [flowInput.text, revealedChars],
-  );
-
-  const inFlowEmbedIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const artifact of flowInput.artifacts) {
-      if (embedPhases[artifact.id] === "inFlow") ids.add(artifact.id);
-    }
-    return ids;
-  }, [embedPhases, flowInput.artifacts]);
-
-  const finalLayout = useMemo(
-    () => runFlowLayout(flowInput, columnWidth, flowInput.text, allEmbedIds),
-    [flowInput, columnWidth, allEmbedIds],
-  );
-
-  const textLayout = useMemo(
-    () => runFlowLayout(flowInput, columnWidth, revealedText, inFlowEmbedIds),
-    [flowInput, columnWidth, revealedText, inFlowEmbedIds],
+  const visibleLines = useMemo(
+    () => (fullLayout ? buildVisibleLines(fullLayout.lines, revealedChars) : []),
+    [fullLayout, revealedChars],
   );
 
   const sideById = useMemo(() => {
@@ -269,14 +257,8 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
   }, [flowInput.artifacts]);
 
   const layoutHeight = useMemo(
-    () =>
-      computeContainerHeight(
-        [textLayout, finalLayout],
-        flowInput,
-        sideById,
-        embedPhases,
-      ),
-    [textLayout, finalLayout, flowInput, sideById, embedPhases],
+    () => computeContainerHeight(fullLayout, flowInput, sideById),
+    [fullLayout, flowInput, sideById],
   );
 
   const embedsSettled =
@@ -302,8 +284,8 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
 
   const showCaret =
     !typewriterDone &&
-    revealedText.length > 0 &&
-    revealedText.length < fullTextLength;
+    visibleLines.length > 0 &&
+    revealedChars < layoutCharCount;
 
   return (
     <div className="manuscript-reading relative overflow-visible -mx-20 px-20">
@@ -313,49 +295,14 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
         className="relative"
         style={{ height: layoutHeight, minHeight: layoutHeight }}
       >
-        {textLayout?.lines.map((line) => (
-          <span
-            key={`${line.y}:${line.x}:${line.text}`}
-            className={`absolute z-20 block text-neutral-900 ${
-              allowReflowTransition
-                ? "transition-[top,left,width] duration-500 ease-out"
-                : ""
-            } ${flowInput.boldLines.has(line.text.trim()) ? "font-semibold" : ""}`}
-            style={{
-              font: flowInput.font,
-              lineHeight: `${flowInput.lineHeight}px`,
-              left: line.x,
-              top: line.y,
-              width: line.width,
-            }}
-          >
-            {line.text}
-          </span>
-        ))}
-
-        {showCaret && textLayout && textLayout.lines.length > 0 && (
-          <span
-            aria-hidden="true"
-            className="absolute z-20 inline-block h-[1.1em] w-[2px] animate-pulse bg-neutral-700"
-            style={{
-              left:
-                (textLayout.lines[textLayout.lines.length - 1]?.x ?? 0) +
-                (textLayout.lines[textLayout.lines.length - 1]?.width ?? 0),
-              top: textLayout.lines[textLayout.lines.length - 1]?.y ?? 0,
-            }}
-          />
-        )}
-
         {flowInput.embeds.map((embed) => {
           const phase = embedPhases[embed.id] ?? "loading";
           const image = images[embed.id];
           const side = sideById.get(embed.id) ?? "left";
-          const inFlow = phase === "inFlow";
-          const visible = phase === "visible" || inFlow;
-
-          const rectSource = inFlow
-            ? textLayout?.embeds.find((item) => item.id === embed.id)
-            : finalLayout?.embeds.find((item) => item.id === embed.id);
+          const visible = phase === "visible" || phase === "inFlow";
+          const rectSource = fullLayout?.embeds.find(
+            (item) => item.id === embed.id,
+          );
 
           if (!rectSource || !visible) return null;
 
@@ -365,7 +312,7 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
             <div
               key={embed.id}
               className={`absolute z-10 pointer-events-none manuscript-artifact-enter ${
-                inFlow && allowReflowTransition
+                allowReflowTransition
                   ? "transition-[top,left,width] duration-500 ease-out"
                   : ""
               }`}
@@ -393,6 +340,45 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
             </div>
           );
         })}
+
+        {visibleLines.map((line) => (
+          <span
+            key={`${line.y}:${line.x}:${line.text}`}
+            className={`absolute z-20 block whitespace-nowrap text-neutral-900 ${
+              allowReflowTransition
+                ? "transition-[top,left,width] duration-500 ease-out"
+                : ""
+            } ${
+              flowInput.boldLines.has(line.text.trim())
+                ? "text-neutral-950"
+                : ""
+            }`}
+            style={{
+              font: flowInput.font,
+              lineHeight: `${flowInput.lineHeight}px`,
+              left: line.x,
+              top: line.y,
+              width: line.width,
+              maxWidth: line.width,
+              overflow: "hidden",
+            }}
+          >
+            {line.text}
+          </span>
+        ))}
+
+        {showCaret && visibleLines.length > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute z-20 inline-block h-[1.1em] w-[2px] animate-pulse bg-neutral-700"
+            style={{
+              left:
+                (visibleLines[visibleLines.length - 1]?.x ?? 0) +
+                (visibleLines[visibleLines.length - 1]?.width ?? 0),
+              top: visibleLines[visibleLines.length - 1]?.y ?? 0,
+            }}
+          />
+        )}
       </div>
     </div>
   );
