@@ -55,8 +55,8 @@ export async function POST(req: Request) {
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 800,
-    system: `You are a scribe noting what you see. Return strict JSON only. Short words. Short sentences. Words cost ink.
+    max_tokens: 900,
+    system: `You classify and describe images for a critical archive. Return strict JSON only.
 {
   "isMeme": boolean,
   "memeCertainty": number,
@@ -74,12 +74,12 @@ Field requirements:
 - "isMeme": true only if this is meant as an internet meme or clear meme template instance.
 - "memeCertainty": integer 0–100 — your confidence that this is a meme, not just a funny photo.
 - "notMemeReason": if isMeme is false or memeCertainty < 55, one short sentence why (e.g. "studio portrait, no template or caption"); otherwise null.
-- "description": two or three short paragraphs, 60–90 words total. Short words. If meme, name the template if known. If not a meme, say plainly what the image is.
+- "description": two or three paragraphs, 90–130 words total. Analytic and concrete. If meme, name the template if known and say how it works rhetorically. If not a meme, say plainly what the image is.
 - "candidateName": best KnowYourMeme-searchable name, or null if unknown or not a meme.
-- "visualElements": 4–8 short phrases.
-- "culturalSituation": one or two short sentences (empty string if not a meme).
-- "affectAndTone": one short sentence.
-- "thematicHooks": 4–6 short tags (empty array if not a meme).
+- "visualElements": 4–8 specific phrases.
+- "culturalSituation": one or two sentences on discourse, community, or conflict — specific, not generic (empty string if not a meme).
+- "affectAndTone": one sentence on mood and register.
+- "thematicHooks": 4–6 tags for critical readings (empty array if not a meme).
 
 Return only the JSON object, no surrounding prose.`,
     messages: [

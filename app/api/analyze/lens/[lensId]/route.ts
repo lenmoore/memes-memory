@@ -74,7 +74,7 @@ ${prior.historical ?? "(missing)"}
 SEMIOTIC READING:
 ${prior.semiotic ?? "(missing)"}
 
-Write a plain synthesis: what this meme means and does, for a reader who does not know the internet. No jargon. Do not repeat the readings above. Short words. Short sentences. 40–70 words of prose.
+Write a synthesis: what this meme means and does, for an intelligent reader who may not know the internet. No empty jargon. Do not repeat the readings above. Two or three sentences after the bold opening. 60–100 words of prose.
 
 ${buildSynthesisReadingJsonFormat()}`,
     });
@@ -143,7 +143,7 @@ ${buildReadingJsonFormat(lens)}`,
 
   const message = await client.messages.create({
     model,
-    max_tokens: 800,
+    max_tokens: 1000,
     system,
     messages: [{ role: "user", content: userContent }],
   });

@@ -33,7 +33,7 @@ export function buildArtifactGuidance(lens: Lens): string {
     "Scenes and objects the lens pulls out of the meme — not a repeat of its faces.";
 
   return `Visual artifact rules (${lens.displayName} lens):
-- Artifacts are briefs for a future illuminator. One short sentence each. Short words.
+- Artifacts are briefs for a future illuminator. One or two sentences each — specific, visual, literate.
 - Do NOT describe the same figure twice. Do NOT copy the meme panel three times with new adjectives.
 - At most ONE artifact may name a literal meme element (a face, animal, prop from the image). The rest must extrapolate.
 - Extrapolate the meme's structure into other scenes: human work, ritual, history, architecture, objects, crowds — as this lens would see them.
@@ -59,7 +59,7 @@ Section rules:
 - "sections" is an ordered array mixing prose and artifact blocks.
 - First section must be prose containing the opening **bold** diagnosis on its own line.
 - Include exactly 2 or 3 artifact sections, each placed between prose blocks (never all at the end).
-- Prose total: 70–110 words across all prose sections. Short words. Short paragraphs (one or two sentences each). Markdown only; no headings, bullet lists, or links.
+- Prose total: 110–160 words across all prose sections. Analytic but economical. Two or three sentences per paragraph. Markdown only; no headings, bullet lists, or links.
 
 ${artifactRules}
 
@@ -76,14 +76,14 @@ export function buildSynthesisReadingJsonFormat(): string {
 }
 
 Section rules:
-- First section: prose with one **bold** summary sentence, then at most one short paragraph (one or two sentences).
-- Prose total: 40–70 words. Plain words. No jargon.
+- First section: prose with one **bold** summary sentence, then one paragraph of two or three sentences.
+- Prose total: 60–100 words. Plain but not dumb — name what the meme does and why it lands.
 - Include 1 or 2 artifact sections between prose blocks.
 
 Visual artifact rules (synthesis):
 - Artifacts are for a reader who never saw the meme. Do not repeat meme faces or panels.
-- Extrapolate to plain human scenes and objects that carry the joke (work, oath, wait, desire vs duty).
-- One short sentence each. Each artifact must look unlike the others and unlike the source image.
+- Extrapolate to human scenes and objects that carry the joke (work, oath, wait, desire vs duty).
+- One or two sentences each, visually specific. Each artifact must look unlike the others and unlike the source image.
 - ${LENS_ARTIFACT_EXTRAPOLATIONS.synthesis}
 - "side": alternate left and right where possible.`;
 }
