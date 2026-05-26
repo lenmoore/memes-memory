@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import MarkdownBody from "@/components/MarkdownBody";
 
 export type LensRunInputs =
   | {
@@ -187,8 +188,8 @@ export default function LensPanel({
         </details>
       )}
 
-      <div className="whitespace-pre-wrap text-[1.0625rem] leading-relaxed">
-        {text}
+      <div className="text-[1.0625rem] leading-relaxed">
+        <MarkdownBody>{text}</MarkdownBody>
         {status === "starting" && <PulsingDot />}
         {status === "streaming" && !text && <PulsingDot />}
       </div>

@@ -4,12 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Upload, { type UploadPayload } from "@/components/Upload";
 import LensPanel, { type LensRunInputs } from "@/components/LensPanel";
 import Screen from "@/components/Screen";
-import { LENSES, type Lens } from "@/lib/lenses/registry";
-
-type Recognition = {
-  description: string;
-  candidateName: string | null;
-};
+import { LENSES, type Lens, getLensesForScreen } from "@/lib/lenses/registry";
+import type { Recognition } from "@/lib/recognition";
 
 type KymPayload = {
   result: {
@@ -30,7 +26,7 @@ const SCREEN_LABELS: Record<1 | 2 | 3, { title: string; subtitle: string }> = {
   },
   2: {
     title: "Critical theory lenses",
-    subtitle: "Six readings, run in parallel.",
+    subtitle: "Two or three readings, chosen for this meme.",
   },
   3: {
     title: "Infrastructural / technological lenses",
@@ -55,6 +51,19 @@ export default function Page() {
 
   const [lensOutputs, setLensOutputs] = useState<Record<string, string>>({});
 
+  const [selectedScreen2Ids, setSelectedScreen2Ids] = useState<string[] | null>(
+    null,
+  );
+  const [lensSelectionRationale, setLensSelectionRationale] = useState<
+    string | null
+  >(null);
+  const [lensSelectionStatus, setLensSelectionStatus] = useState<
+    "idle" | "waiting" | "running" | "done" | "error"
+  >("idle");
+  const [lensSelectionError, setLensSelectionError] = useState<string | null>(
+    null,
+  );
+
   const lensesByScreen = useMemo(() => {
     const by: Record<1 | 2 | 3, Lens[]> = { 1: [], 2: [], 3: [] };
     for (const l of LENSES) by[l.screen].push(l);
@@ -71,6 +80,10 @@ export default function Page() {
     setKymError(null);
     setKymStatus("idle");
     setLensOutputs({});
+    setSelectedScreen2Ids(null);
+    setLensSelectionRationale(null);
+    setLensSelectionStatus("idle");
+    setLensSelectionError(null);
 
     try {
       const res = await fetch("/api/analyze/recognize", {
@@ -115,6 +128,80 @@ export default function Page() {
   }
 
   const screen1Ready = recognitionStatus === "done";
+  const screen1Complete =
+    Boolean(lensOutputs["historical"]) &&
+    Boolean(lensOutputs["semiotic"]) &&
+    Boolean(lensOutputs["synthesis"]);
+
+  const screen2Lenses = useMemo(() => {
+    const all = getLensesForScreen(2);
+    if (!selectedScreen2Ids) return [];
+    return all.filter((l) => selectedScreen2Ids.includes(l.id));
+  }, [selectedScreen2Ids]);
+
+  useEffect(() => {
+    if (!recognition || !screen1Complete) {
+      if (recognition && screen1Ready && !screen1Complete) {
+        setLensSelectionStatus("waiting");
+      }
+      return;
+    }
+    if (lensSelectionStatus === "done" || lensSelectionStatus === "running") {
+      return;
+    }
+
+    setLensSelectionStatus("running");
+    setLensSelectionError(null);
+
+    (async () => {
+      try {
+        const res = await fetch("/api/analyze/select-lenses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recognition,
+            kymSummary: kym?.summary ?? null,
+            screen1: {
+              historical: lensOutputs["historical"],
+              semiotic: lensOutputs["semiotic"],
+              synthesis: lensOutputs["synthesis"],
+            },
+          }),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`${res.status} ${text}`);
+        }
+        const data = (await res.json()) as {
+          selected: string[];
+          rationale: string;
+        };
+        setSelectedScreen2Ids(data.selected);
+        setLensSelectionRationale(data.rationale || null);
+        setLensSelectionStatus("done");
+      } catch (err) {
+        setLensSelectionError(err instanceof Error ? err.message : String(err));
+        setSelectedScreen2Ids(
+          getLensesForScreen(2)
+            .slice(0, 3)
+            .map((l) => l.id),
+        );
+        setLensSelectionStatus("error");
+      }
+    })();
+  }, [
+    recognition,
+    screen1Complete,
+    screen1Ready,
+    kym?.summary,
+    lensOutputs,
+    lensSelectionStatus,
+  ]);
+
+  function lensesForScreen(screenNum: 1 | 2 | 3): Lens[] {
+    if (screenNum === 2) return screen2Lenses;
+    return lensesByScreen[screenNum];
+  }
 
   function inputsForLens(lens: Lens): LensRunInputs | null {
     if (!payload) return null;
@@ -134,6 +221,9 @@ export default function Page() {
         kym: kym?.summary ?? null,
       };
     }
+    if (lens.screen === 2 && !selectedScreen2Ids?.includes(lens.id)) {
+      return null;
+    }
     return {
       kind: "standard",
       imageBase64: payload.imageBase64,
@@ -152,9 +242,6 @@ export default function Page() {
         <h1 className="text-4xl font-serif tracking-tight">
           Memes as Stained Glass
         </h1>
-        <p className="mt-3 text-neutral-600">
-          Upload a meme. A cathedral docent will read it for you, in writing, across three screens.
-        </p>
       </header>
 
       <Upload onUpload={handleUpload} />
@@ -174,11 +261,49 @@ export default function Page() {
           )}
           {recognition && (
             <>
-              <p className="mt-2 text-neutral-800">{recognition.description}</p>
+              <p className="mt-2 text-neutral-800 whitespace-pre-wrap leading-relaxed">
+                {recognition.description}
+              </p>
               {recognition.candidateName && (
-                <p className="mt-2 text-sm text-neutral-500">
+                <p className="mt-3 text-sm text-neutral-500">
                   Candidate name: <em>{recognition.candidateName}</em>
                 </p>
+              )}
+              {(recognition.visualElements.length > 0 ||
+                recognition.culturalSituation ||
+                recognition.affectAndTone ||
+                recognition.thematicHooks.length > 0) && (
+                <details className="mt-4">
+                  <summary className="cursor-pointer text-neutral-500 text-xs uppercase tracking-wider">
+                    analysis details
+                  </summary>
+                  <div className="mt-3 space-y-3 text-sm text-neutral-700">
+                    {recognition.visualElements.length > 0 && (
+                      <p>
+                        <span className="text-neutral-500">Visual elements: </span>
+                        {recognition.visualElements.join("; ")}
+                      </p>
+                    )}
+                    {recognition.culturalSituation && (
+                      <p>
+                        <span className="text-neutral-500">Cultural situation: </span>
+                        {recognition.culturalSituation}
+                      </p>
+                    )}
+                    {recognition.affectAndTone && (
+                      <p>
+                        <span className="text-neutral-500">Affect and tone: </span>
+                        {recognition.affectAndTone}
+                      </p>
+                    )}
+                    {recognition.thematicHooks.length > 0 && (
+                      <p>
+                        <span className="text-neutral-500">Thematic hooks: </span>
+                        {recognition.thematicHooks.join("; ")}
+                      </p>
+                    )}
+                  </div>
+                </details>
               )}
             </>
           )}
@@ -248,7 +373,31 @@ export default function Page() {
               title={SCREEN_LABELS[screenNum].title}
               subtitle={SCREEN_LABELS[screenNum].subtitle}
             >
-              {lensesByScreen[screenNum].map((lens) => (
+              {screenNum === 2 && lensSelectionStatus === "waiting" && (
+                <p className="text-neutral-500 italic -mt-4 mb-6">
+                  <ProgressDots /> waiting for screen 1 before choosing lenses
+                </p>
+              )}
+              {screenNum === 2 && lensSelectionStatus === "running" && (
+                <p className="text-neutral-500 italic -mt-4 mb-6">
+                  <ProgressDots /> choosing lenses for this meme
+                </p>
+              )}
+              {screenNum === 2 &&
+                lensSelectionStatus === "error" &&
+                lensSelectionError && (
+                  <p className="text-neutral-500 italic -mt-4 mb-6">
+                    lens selection failed ({lensSelectionError}) — using defaults
+                  </p>
+                )}
+              {screenNum === 2 &&
+                lensSelectionRationale &&
+                selectedScreen2Ids && (
+                  <p className="text-neutral-600 text-sm italic -mt-4 mb-6 border-l-2 border-neutral-300 pl-3">
+                    {lensSelectionRationale}
+                  </p>
+                )}
+              {lensesForScreen(screenNum).map((lens) => (
                 <div key={lens.id}>
                   <div
                     className="bg-neutral-200 aspect-[4/3] mb-6"

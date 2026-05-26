@@ -42,7 +42,9 @@ ${prior.historical ?? "(missing)"}
 SEMIOTIC READING:
 ${prior.semiotic ?? "(missing)"}
 
-Write a 2-4 sentence plain-language synthesis explaining what this meme means and does, for a smart non-internet-native reader. No jargon. Do not repeat the readings above; synthesize them.`,
+Write a 2-4 sentence plain-language synthesis explaining what this meme means and does, for a smart non-internet-native reader. No jargon. Do not repeat the readings above; synthesize them.
+
+Format in Markdown: open with one **bold** summary sentence, then one short prose paragraph if needed. No headings, bullet lists, or links.`,
     });
   } else {
     if (!lens.primerPath) {
