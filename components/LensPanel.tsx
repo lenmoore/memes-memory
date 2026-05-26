@@ -33,6 +33,7 @@ export default function LensPanel({
   onComplete,
 }: Props) {
   const [reading, setReading] = useState<LensReading | null>(null);
+  const [displaySettled, setDisplaySettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<
     "idle" | "starting" | "streaming" | "done" | "error"
@@ -63,6 +64,7 @@ export default function LensPanel({
       return;
     }
     setReading(null);
+    setDisplaySettled(false);
     setError(null);
     setStatus("starting");
 
@@ -172,8 +174,13 @@ export default function LensPanel({
         </details>
       )}
 
-      <div>
-        {reading && <ManuscriptReading reading={reading} />}
+      <div className="relative min-h-[2rem]">
+        {reading && (
+          <ManuscriptReading
+            reading={reading}
+            onSettled={() => setDisplaySettled(true)}
+          />
+        )}
         {status === "starting" && <PulsingDot />}
         {status === "streaming" && !reading && <PulsingDot />}
       </div>
@@ -184,7 +191,7 @@ export default function LensPanel({
         </p>
       )}
 
-      {status === "done" && (
+      {status === "done" && displaySettled && (
         <p className="text-neutral-400 text-xs">— end of reading —</p>
       )}
     </article>

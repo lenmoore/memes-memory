@@ -344,7 +344,7 @@ export default function Page() {
   };
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16">
+    <main className="mx-auto max-w-3xl overflow-x-visible px-6 py-16">
       <header className="mb-12">
         <h1 className="text-4xl font-serif tracking-tight">
           Memes as Stained Glass
