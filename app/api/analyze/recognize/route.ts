@@ -15,6 +15,12 @@ function extractJson(text: string): string {
   return text.trim();
 }
 
+function clampCertainty(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
 function normalizeRecognition(raw: Record<string, unknown>): Recognition {
   const str = (v: unknown, fallback = "") =>
     typeof v === "string" ? v.trim() : fallback;
@@ -23,7 +29,14 @@ function normalizeRecognition(raw: Record<string, unknown>): Recognition {
       ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
       : [];
 
+  const memeCertainty = clampCertainty(raw.memeCertainty);
+  const isMeme =
+    typeof raw.isMeme === "boolean" ? raw.isMeme : memeCertainty >= 55;
+
   return {
+    isMeme,
+    memeCertainty,
+    notMemeReason: str(raw.notMemeReason) || null,
     description: str(raw.description, "Unable to describe this image."),
     candidateName: str(raw.candidateName) || null,
     visualElements: strArr(raw.visualElements),
@@ -42,9 +55,12 @@ export async function POST(req: Request) {
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 1400,
-    system: `You are a sharp-eyed analyst of internet memes. Return strict JSON only:
+    max_tokens: 800,
+    system: `You are a scribe noting what you see. Return strict JSON only. Short words. Short sentences. Words cost ink.
 {
+  "isMeme": boolean,
+  "memeCertainty": number,
+  "notMemeReason": string | null,
   "description": string,
   "candidateName": string | null,
   "visualElements": string[],
@@ -54,12 +70,16 @@ export async function POST(req: Request) {
 }
 
 Field requirements:
-- "description": 2–3 short paragraphs (150–250 words total). Name the template if recognizable. Describe composition, text overlays, figures, symbols, and what the meme is doing rhetorically — not just what it looks like.
-- "candidateName": best KnowYourMeme-searchable name (e.g. "Saint Javelin", "NAFO", "Distracted Boyfriend"), or null if you cannot confidently name it.
-- "visualElements": 4–8 concrete visual details as short phrases (e.g. "Orthodox icon halos", "Javelin missile in hand").
-- "culturalSituation": 2–4 sentences on what discourse, community, conflict, or platform context this meme sits in.
-- "affectAndTone": 1–2 sentences on the emotional register (grief, irony, rage, tenderness, etc.).
-- "thematicHooks": 4–8 thematic tags as short phrases that could guide critical-theory readings (e.g. "religious iconography repurposed", "expatriate dislocation", "information warfare").
+- First decide if this is an internet meme (image macro, reaction image, captioned template, viral remix, meme format) vs a non-meme image (plain photo, product shot, artwork, screenshot without meme intent, document, etc.).
+- "isMeme": true only if this is meant as an internet meme or clear meme template instance.
+- "memeCertainty": integer 0–100 — your confidence that this is a meme, not just a funny photo.
+- "notMemeReason": if isMeme is false or memeCertainty < 55, one short sentence why (e.g. "studio portrait, no template or caption"); otherwise null.
+- "description": two or three short paragraphs, 60–90 words total. Short words. If meme, name the template if known. If not a meme, say plainly what the image is.
+- "candidateName": best KnowYourMeme-searchable name, or null if unknown or not a meme.
+- "visualElements": 4–8 short phrases.
+- "culturalSituation": one or two short sentences (empty string if not a meme).
+- "affectAndTone": one short sentence.
+- "thematicHooks": 4–6 short tags (empty array if not a meme).
 
 Return only the JSON object, no surrounding prose.`,
     messages: [
@@ -80,7 +100,7 @@ Return only the JSON object, no surrounding prose.`,
           },
           {
             type: "text",
-            text: "Analyze this meme in depth. Identify it if you can, and extract as much contextual material as possible for downstream critical readings.",
+            text: "Classify whether this is an internet meme and rate your certainty 0–100. Then describe what you see.",
           },
         ],
       },
@@ -97,7 +117,13 @@ Return only the JSON object, no surrounding prose.`,
     return Response.json(normalizeRecognition(parsed));
   } catch {
     return Response.json(
-      normalizeRecognition({ description: text.trim(), candidateName: null }),
+      normalizeRecognition({
+        description: text.trim(),
+        candidateName: null,
+        isMeme: false,
+        memeCertainty: 0,
+        notMemeReason: "Could not classify this image.",
+      }),
       { status: 200 },
     );
   }

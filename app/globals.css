@@ -14,3 +14,8 @@ article p {
   line-height: 1.6;
   margin-bottom: 1rem;
 }
+
+/* Manuscript layout: prose wraps around floated artifact placeholders */
+.manuscript-reading figure {
+  shape-outside: inset(0);
+}

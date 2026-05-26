@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import MarkdownBody from "@/components/MarkdownBody";
+import ManuscriptReading from "@/components/ManuscriptReading";
+import type { LensReading } from "@/lib/lenses/reading";
 
 export type LensRunInputs =
   | {
@@ -9,6 +10,7 @@ export type LensRunInputs =
       imageBase64: string;
       mediaType: string;
       kym?: string | null;
+      webContext?: string | null;
     }
   | {
       kind: "synthesis";
@@ -20,7 +22,7 @@ type Props = {
   displayName: string;
   inputs: LensRunInputs | null;
   primerPath: string | null;
-  onComplete?: (text: string) => void;
+  onComplete?: (reading: LensReading) => void;
 };
 
 export default function LensPanel({
@@ -30,7 +32,7 @@ export default function LensPanel({
   primerPath,
   onComplete,
 }: Props) {
-  const [text, setText] = useState("");
+  const [reading, setReading] = useState<LensReading | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<
     "idle" | "starting" | "streaming" | "done" | "error"
@@ -47,14 +49,12 @@ export default function LensPanel({
     setRunToken((n) => n + 1);
   }, [inputs]);
 
-  // Stable signature for the inputs so the effect doesn't re-fire on every
-  // parent render (inputs is a fresh object each render).
   const inputsSig = useMemo(() => {
     if (!inputs) return "";
     if (inputs.kind === "synthesis") {
       return `synth:${inputs.priorOutputs.historical.length}:${inputs.priorOutputs.semiotic.length}`;
     }
-    return `std:${inputs.mediaType}:${inputs.imageBase64.length}:${inputs.kym?.length ?? 0}`;
+    return `std:${inputs.mediaType}:${inputs.imageBase64.length}:${inputs.kym?.length ?? 0}:${inputs.webContext?.length ?? 0}`;
   }, [inputs]);
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export default function LensPanel({
       setStatus("idle");
       return;
     }
-    setText("");
+    setReading(null);
     setError(null);
     setStatus("starting");
 
@@ -78,6 +78,7 @@ export default function LensPanel({
         imageBase64: inputs.imageBase64,
         mediaType: inputs.mediaType,
         kym: inputs.kym ?? null,
+        webContext: inputs.webContext ?? null,
       };
     }
 
@@ -95,28 +96,11 @@ export default function LensPanel({
           setStatus("error");
           return;
         }
-        if (!res.body) {
-          setError("No response body");
-          setStatus("error");
-          return;
-        }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let accum = "";
-        let first = true;
-        while (true) {
-          const { value, done: streamDone } = await reader.read();
-          if (streamDone) break;
-          const chunk = decoder.decode(value, { stream: true });
-          accum += chunk;
-          if (first) {
-            first = false;
-            setStatus("streaming");
-          }
-          setText((t) => t + chunk);
-        }
+        setStatus("streaming");
+        const data = (await res.json()) as { reading: LensReading };
+        setReading(data.reading);
         setStatus("done");
-        onCompleteRef.current?.(accum);
+        onCompleteRef.current?.(data.reading);
       } catch (err) {
         if ((err as { name?: string }).name === "AbortError") return;
         setError(err instanceof Error ? err.message : String(err));
@@ -188,10 +172,10 @@ export default function LensPanel({
         </details>
       )}
 
-      <div className="text-[1.0625rem] leading-relaxed">
-        <MarkdownBody>{text}</MarkdownBody>
+      <div>
+        {reading && <ManuscriptReading reading={reading} />}
         {status === "starting" && <PulsingDot />}
-        {status === "streaming" && !text && <PulsingDot />}
+        {status === "streaming" && !reading && <PulsingDot />}
       </div>
 
       {error && (

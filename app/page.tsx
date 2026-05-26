@@ -4,8 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import Upload, { type UploadPayload } from "@/components/Upload";
 import LensPanel, { type LensRunInputs } from "@/components/LensPanel";
 import Screen from "@/components/Screen";
+import ScreenSlidePanel from "@/components/ScreenSlidePanel";
 import { LENSES, type Lens, getLensesForScreen } from "@/lib/lenses/registry";
+import type { LensReading } from "@/lib/lenses/reading";
+import { lensReadingToPlainText } from "@/lib/lenses/reading";
 import type { Recognition } from "@/lib/recognition";
+import { evaluateMemeGate } from "@/lib/memeGate";
 
 type KymPayload = {
   result: {
@@ -16,6 +20,23 @@ type KymPayload = {
     spread: string | null;
   } | null;
   summary?: string;
+};
+
+type ReverseSearchPayload = {
+  result: {
+    imageUrl: string;
+    queryGuess: string | null;
+    matches: Array<{
+      title: string | null;
+      source: string | null;
+      link: string | null;
+      snippet: string | null;
+    }>;
+    relatedQueries: string[];
+  } | null;
+  summary?: string;
+  skipped?: boolean;
+  reason?: string;
 };
 
 const SCREEN_LABELS: Record<1 | 2 | 3, { title: string; subtitle: string }> = {
@@ -49,7 +70,20 @@ export default function Page() {
   >("idle");
   const [kymError, setKymError] = useState<string | null>(null);
 
-  const [lensOutputs, setLensOutputs] = useState<Record<string, string>>({});
+  const [reverseSearch, setReverseSearch] = useState<ReverseSearchPayload | null>(
+    null,
+  );
+  const [reverseSearchStatus, setReverseSearchStatus] = useState<
+    "idle" | "skipped" | "running" | "done" | "error"
+  >("idle");
+  const [reverseSearchError, setReverseSearchError] = useState<string | null>(
+    null,
+  );
+
+  const [lensOutputs, setLensOutputs] = useState<Record<string, LensReading>>(
+    {},
+  );
+  const [activeScreen, setActiveScreen] = useState<1 | 2 | 3>(1);
 
   const [selectedScreen2Ids, setSelectedScreen2Ids] = useState<string[] | null>(
     null,
@@ -79,7 +113,11 @@ export default function Page() {
     setKym(null);
     setKymError(null);
     setKymStatus("idle");
+    setReverseSearch(null);
+    setReverseSearchError(null);
+    setReverseSearchStatus("idle");
     setLensOutputs({});
+    setActiveScreen(1);
     setSelectedScreen2Ids(null);
     setLensSelectionRationale(null);
     setLensSelectionStatus("idle");
@@ -102,13 +140,36 @@ export default function Page() {
       setRecognition(data);
       setRecognitionStatus("done");
 
-      if (data.candidateName) {
+      setReverseSearchStatus("running");
+      let reverseData: ReverseSearchPayload | null = null;
+      try {
+        const reverseRes = await fetch("/api/analyze/reverse-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageBase64: p.imageBase64,
+            mediaType: p.mediaType,
+          }),
+        });
+        if (!reverseRes.ok) throw new Error(`Reverse search: ${reverseRes.status}`);
+        reverseData = (await reverseRes.json()) as ReverseSearchPayload;
+        setReverseSearch(reverseData);
+        setReverseSearchStatus(reverseData.skipped ? "skipped" : "done");
+      } catch (err) {
+        setReverseSearchError(err instanceof Error ? err.message : String(err));
+        setReverseSearchStatus("error");
+      }
+
+      const kymName =
+        data.candidateName ?? reverseData?.result?.queryGuess ?? null;
+
+      if (kymName) {
         setKymStatus("running");
         try {
           const kymRes = await fetch("/api/analyze/kym", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: data.candidateName }),
+            body: JSON.stringify({ name: kymName }),
           });
           if (!kymRes.ok) throw new Error(`KYM lookup: ${kymRes.status}`);
           const kymData = (await kymRes.json()) as KymPayload;
@@ -127,7 +188,19 @@ export default function Page() {
     }
   }
 
-  const screen1Ready = recognitionStatus === "done";
+  const memeGate = useMemo(
+    () =>
+      evaluateMemeGate({
+        recognition,
+        reverseSearch: reverseSearch?.result ?? null,
+        reverseSearchStatus,
+        kymStatus,
+        kymHasResult: Boolean(kym?.result),
+      }),
+    [recognition, reverseSearch, reverseSearchStatus, kymStatus, kym?.result],
+  );
+
+  const screen1Ready = memeGate.approved;
   const screen1Complete =
     Boolean(lensOutputs["historical"]) &&
     Boolean(lensOutputs["semiotic"]) &&
@@ -162,9 +235,15 @@ export default function Page() {
             recognition,
             kymSummary: kym?.summary ?? null,
             screen1: {
-              historical: lensOutputs["historical"],
-              semiotic: lensOutputs["semiotic"],
-              synthesis: lensOutputs["synthesis"],
+              historical: lensOutputs["historical"]
+                ? lensReadingToPlainText(lensOutputs["historical"])
+                : undefined,
+              semiotic: lensOutputs["semiotic"]
+                ? lensReadingToPlainText(lensOutputs["semiotic"])
+                : undefined,
+              synthesis: lensOutputs["synthesis"]
+                ? lensReadingToPlainText(lensOutputs["synthesis"])
+                : undefined,
             },
           }),
         });
@@ -209,16 +288,44 @@ export default function Page() {
       const historical = lensOutputs["historical"];
       const semiotic = lensOutputs["semiotic"];
       if (!historical || !semiotic) return null;
-      return { kind: "synthesis", priorOutputs: { historical, semiotic } };
+      return {
+        kind: "synthesis",
+        priorOutputs: {
+          historical: lensReadingToPlainText(historical),
+          semiotic: lensReadingToPlainText(semiotic),
+        },
+      };
     }
     if (lens.id === "historical") {
-      // Wait for KYM resolution (done | skipped | error) so we don't race it.
-      if (kymStatus === "idle" || kymStatus === "running") return null;
+      if (
+        kymStatus === "idle" ||
+        kymStatus === "running" ||
+        reverseSearchStatus === "idle" ||
+        reverseSearchStatus === "running"
+      ) {
+        return null;
+      }
       return {
         kind: "standard",
         imageBase64: payload.imageBase64,
         mediaType: payload.mediaType,
         kym: kym?.summary ?? null,
+        webContext: reverseSearch?.summary ?? null,
+      };
+    }
+    if (lens.id === "semiotic") {
+      if (
+        reverseSearchStatus === "idle" ||
+        reverseSearchStatus === "running"
+      ) {
+        return null;
+      }
+      return {
+        kind: "standard",
+        imageBase64: payload.imageBase64,
+        mediaType: payload.mediaType,
+        kym: null,
+        webContext: reverseSearch?.summary ?? null,
       };
     }
     if (lens.screen === 2 && !selectedScreen2Ids?.includes(lens.id)) {
@@ -232,12 +339,12 @@ export default function Page() {
     };
   }
 
-  const handleLensComplete = (id: string) => (output: string) => {
+  const handleLensComplete = (id: string) => (output: LensReading) => {
     setLensOutputs((prev) => ({ ...prev, [id]: output }));
   };
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
+    <main className="mx-auto max-w-3xl px-6 py-16">
       <header className="mb-12">
         <h1 className="text-4xl font-serif tracking-tight">
           Memes as Stained Glass
@@ -261,49 +368,73 @@ export default function Page() {
           )}
           {recognition && (
             <>
-              <p className="mt-2 text-neutral-800 whitespace-pre-wrap leading-relaxed">
-                {recognition.description}
+              <p className="mt-2 text-sm text-neutral-600 tabular-nums">
+                Meme certainty: {recognition.memeCertainty}%
               </p>
-              {recognition.candidateName && (
-                <p className="mt-3 text-sm text-neutral-500">
-                  Candidate name: <em>{recognition.candidateName}</em>
+              {memeGate.pending && (
+                <p className="mt-3 text-neutral-500 italic">
+                  <ProgressDots /> vision uncertain — verifying
                 </p>
               )}
-              {(recognition.visualElements.length > 0 ||
-                recognition.culturalSituation ||
-                recognition.affectAndTone ||
-                recognition.thematicHooks.length > 0) && (
-                <details className="mt-4">
-                  <summary className="cursor-pointer text-neutral-500 text-xs uppercase tracking-wider">
-                    analysis details
-                  </summary>
-                  <div className="mt-3 space-y-3 text-sm text-neutral-700">
-                    {recognition.visualElements.length > 0 && (
-                      <p>
-                        <span className="text-neutral-500">Visual elements: </span>
-                        {recognition.visualElements.join("; ")}
-                      </p>
-                    )}
-                    {recognition.culturalSituation && (
-                      <p>
-                        <span className="text-neutral-500">Cultural situation: </span>
-                        {recognition.culturalSituation}
-                      </p>
-                    )}
-                    {recognition.affectAndTone && (
-                      <p>
-                        <span className="text-neutral-500">Affect and tone: </span>
-                        {recognition.affectAndTone}
-                      </p>
-                    )}
-                    {recognition.thematicHooks.length > 0 && (
-                      <p>
-                        <span className="text-neutral-500">Thematic hooks: </span>
-                        {recognition.thematicHooks.join("; ")}
-                      </p>
-                    )}
-                  </div>
-                </details>
+              {!memeGate.approved && !memeGate.pending && (
+                <p className="mt-3 text-neutral-800 leading-relaxed">
+                  This is not a meme
+                  {memeGate.message ? ` — ${memeGate.message}` : "."}{" "}
+                  Analysis will not run.
+                </p>
+              )}
+              {memeGate.approved && memeGate.source === "kym" && memeGate.message && (
+                <p className="mt-3 text-sm text-neutral-600 italic">
+                  {memeGate.message}
+                </p>
+              )}
+              {memeGate.approved && (
+                <>
+                  <p className="mt-2 text-neutral-800 whitespace-pre-wrap leading-relaxed">
+                    {recognition.description}
+                  </p>
+                  {recognition.candidateName && (
+                    <p className="mt-3 text-sm text-neutral-500">
+                      Candidate name: <em>{recognition.candidateName}</em>
+                    </p>
+                  )}
+                  {(recognition.visualElements.length > 0 ||
+                    recognition.culturalSituation ||
+                    recognition.affectAndTone ||
+                    recognition.thematicHooks.length > 0) && (
+                    <details className="mt-4">
+                      <summary className="cursor-pointer text-neutral-500 text-xs uppercase tracking-wider">
+                        analysis details
+                      </summary>
+                      <div className="mt-3 space-y-3 text-sm text-neutral-700">
+                        {recognition.visualElements.length > 0 && (
+                          <p>
+                            <span className="text-neutral-500">Visual elements: </span>
+                            {recognition.visualElements.join("; ")}
+                          </p>
+                        )}
+                        {recognition.culturalSituation && (
+                          <p>
+                            <span className="text-neutral-500">Cultural situation: </span>
+                            {recognition.culturalSituation}
+                          </p>
+                        )}
+                        {recognition.affectAndTone && (
+                          <p>
+                            <span className="text-neutral-500">Affect and tone: </span>
+                            {recognition.affectAndTone}
+                          </p>
+                        )}
+                        {recognition.thematicHooks.length > 0 && (
+                          <p>
+                            <span className="text-neutral-500">Thematic hooks: </span>
+                            {recognition.thematicHooks.join("; ")}
+                          </p>
+                        )}
+                      </div>
+                    </details>
+                  )}
+                </>
               )}
             </>
           )}
@@ -366,53 +497,58 @@ export default function Page() {
 
       {screen1Ready && payload && (
         <>
+          <ScreenSlidePanel
+            activeScreen={activeScreen}
+            onScreenChange={setActiveScreen}
+          />
           {([1, 2, 3] as const).map((screenNum) => (
-            <Screen
+            <div
               key={screenNum}
-              index={screenNum}
-              title={SCREEN_LABELS[screenNum].title}
-              subtitle={SCREEN_LABELS[screenNum].subtitle}
+              hidden={activeScreen !== screenNum}
+              aria-hidden={activeScreen !== screenNum}
             >
-              {screenNum === 2 && lensSelectionStatus === "waiting" && (
-                <p className="text-neutral-500 italic -mt-4 mb-6">
-                  <ProgressDots /> waiting for screen 1 before choosing lenses
-                </p>
-              )}
-              {screenNum === 2 && lensSelectionStatus === "running" && (
-                <p className="text-neutral-500 italic -mt-4 mb-6">
-                  <ProgressDots /> choosing lenses for this meme
-                </p>
-              )}
-              {screenNum === 2 &&
-                lensSelectionStatus === "error" &&
-                lensSelectionError && (
+              <Screen
+                index={screenNum}
+                title={SCREEN_LABELS[screenNum].title}
+                subtitle={SCREEN_LABELS[screenNum].subtitle}
+              >
+                {screenNum === 2 && lensSelectionStatus === "waiting" && (
                   <p className="text-neutral-500 italic -mt-4 mb-6">
-                    lens selection failed ({lensSelectionError}) — using defaults
+                    <ProgressDots /> waiting for screen 1 before choosing lenses
                   </p>
                 )}
-              {screenNum === 2 &&
-                lensSelectionRationale &&
-                selectedScreen2Ids && (
-                  <p className="text-neutral-600 text-sm italic -mt-4 mb-6 border-l-2 border-neutral-300 pl-3">
-                    {lensSelectionRationale}
+                {screenNum === 2 && lensSelectionStatus === "running" && (
+                  <p className="text-neutral-500 italic -mt-4 mb-6">
+                    <ProgressDots /> choosing lenses for this meme
                   </p>
                 )}
-              {lensesForScreen(screenNum).map((lens) => (
-                <div key={lens.id}>
-                  <div
-                    className="bg-neutral-200 aspect-[4/3] mb-6"
-                    aria-label="manuscript visual placeholder"
-                  />
-                  <LensPanel
-                    lensId={lens.id}
-                    displayName={lens.displayName}
-                    primerPath={lens.primerPath}
-                    inputs={inputsForLens(lens)}
-                    onComplete={handleLensComplete(lens.id)}
-                  />
-                </div>
-              ))}
-            </Screen>
+                {screenNum === 2 &&
+                  lensSelectionStatus === "error" &&
+                  lensSelectionError && (
+                    <p className="text-neutral-500 italic -mt-4 mb-6">
+                      lens selection failed ({lensSelectionError}) — using defaults
+                    </p>
+                  )}
+                {screenNum === 2 &&
+                  lensSelectionRationale &&
+                  selectedScreen2Ids && (
+                    <p className="text-neutral-600 text-sm italic -mt-4 mb-6 border-l-2 border-neutral-300 pl-3">
+                      {lensSelectionRationale}
+                    </p>
+                  )}
+                {lensesForScreen(screenNum).map((lens) => (
+                  <div key={lens.id}>
+                    <LensPanel
+                      lensId={lens.id}
+                      displayName={lens.displayName}
+                      primerPath={lens.primerPath}
+                      inputs={inputsForLens(lens)}
+                      onComplete={handleLensComplete(lens.id)}
+                    />
+                  </div>
+                ))}
+              </Screen>
+            </div>
           ))}
         </>
       )}

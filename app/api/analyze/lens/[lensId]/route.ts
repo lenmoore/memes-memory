@@ -3,6 +3,16 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getClient } from "@/lib/anthropic";
 import { getLens } from "@/lib/lenses/registry";
+import {
+  lensReadingToPlainText,
+  markdownToFallbackReading,
+  parseLensReading,
+  type LensReading,
+} from "@/lib/lenses/reading";
+import {
+  buildReadingJsonFormat,
+  buildSynthesisReadingJsonFormat,
+} from "@/lib/lenses/prompts/readingFormat";
 import { buildSystemPrompt } from "@/lib/lenses/prompts/systemTemplate";
 
 export const runtime = "nodejs";
@@ -11,8 +21,30 @@ type LensRequest = {
   imageBase64?: string;
   mediaType?: string;
   kym?: string | null;
+  webContext?: string | null;
   priorOutputs?: { historical?: string; semiotic?: string };
 };
+
+function extractJson(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) {
+    return text.slice(start, end + 1);
+  }
+  return text.trim();
+}
+
+function parseReadingResponse(text: string): LensReading {
+  try {
+    const parsed = parseLensReading(JSON.parse(extractJson(text)));
+    if (parsed) return parsed;
+  } catch {
+    // fall through
+  }
+  return markdownToFallbackReading(text);
+}
 
 export async function POST(
   req: Request,
@@ -42,9 +74,9 @@ ${prior.historical ?? "(missing)"}
 SEMIOTIC READING:
 ${prior.semiotic ?? "(missing)"}
 
-Write a 2-4 sentence plain-language synthesis explaining what this meme means and does, for a smart non-internet-native reader. No jargon. Do not repeat the readings above; synthesize them.
+Write a plain synthesis: what this meme means and does, for a reader who does not know the internet. No jargon. Do not repeat the readings above. Short words. Short sentences. 40–70 words of prose.
 
-Format in Markdown: open with one **bold** summary sentence, then one short prose paragraph if needed. No headings, bullet lists, or links.`,
+${buildSynthesisReadingJsonFormat()}`,
     });
   } else {
     if (!lens.primerPath) {
@@ -73,6 +105,15 @@ Format in Markdown: open with one **bold** summary sentence, then one short pros
         text: `KnowYourMeme context:\n\n${body.kym}`,
       });
     }
+    if (
+      body.webContext &&
+      (lens.id === "historical" || lens.id === "semiotic")
+    ) {
+      userContent.push({
+        type: "text",
+        text: `Archive lookup (captions and matches):\n\n${body.webContext}`,
+      });
+    }
     if (!body.imageBase64 || !body.mediaType) {
       return new Response("Missing image", { status: 400 });
     }
@@ -90,7 +131,9 @@ Format in Markdown: open with one **bold** summary sentence, then one short pros
     });
     userContent.push({
       type: "text",
-      text: `Read this meme through the ${lens.displayName} lens.`,
+      text: `Read this meme through the ${lens.displayName} lens.
+
+${buildReadingJsonFormat(lens)}`,
     });
   }
 
@@ -98,49 +141,22 @@ Format in Markdown: open with one **bold** summary sentence, then one short pros
     lens.model ??
     (lens.isSynthesis ? "claude-haiku-4-5-20251001" : "claude-sonnet-4-6");
 
-  const stream = client.messages.stream({
+  const message = await client.messages.create({
     model,
-    max_tokens: 500,
+    max_tokens: 800,
     system,
     messages: [{ role: "user", content: userContent }],
   });
 
-  const encoder = new TextEncoder();
-  const body_ = new ReadableStream<Uint8Array>({
-    start(controller) {
-      let settled = false;
-      stream.on("text", (text: string) => {
-        if (settled) return;
-        try {
-          controller.enqueue(encoder.encode(text));
-        } catch {}
-      });
-      stream.on("end", () => {
-        if (settled) return;
-        settled = true;
-        try { controller.close(); } catch {}
-      });
-      stream.on("error", (err: Error) => {
-        if (settled) return;
-        settled = true;
-        try {
-          controller.enqueue(
-            encoder.encode(`\n\n[stream error: ${err.message}]`),
-          );
-        } catch {}
-        try { controller.error(err); } catch {}
-      });
-    },
-    cancel() {
-      stream.controller?.abort();
-    },
-  });
+  const text = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
 
-  return new Response(body_, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no",
-    },
+  const reading = parseReadingResponse(text);
+
+  return Response.json({
+    reading,
+    plainText: lensReadingToPlainText(reading),
   });
 }

@@ -104,7 +104,7 @@ Rules:
 - "selected" must contain 2 or 3 lens ids from the list above — no others.
 - Pick lenses where this meme has real material to work with, not where a reading would be forced or generic.
 - Prefer lenses that would produce distinct, non-overlapping readings.
-- "rationale": 2–3 sentences, deadpan, explaining why these lenses fit this meme.`,
+- "rationale": one or two short sentences. Plain words. Say why these lenses fit.`,
     messages: [
       {
         role: "user",
