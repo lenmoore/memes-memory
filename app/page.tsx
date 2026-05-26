@@ -1,23 +1,77 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Upload, { type UploadPayload } from "@/components/Upload";
-import LensPanel from "@/components/LensPanel";
+import LensPanel, { type LensRunInputs } from "@/components/LensPanel";
+import Screen from "@/components/Screen";
+import { LENSES, type Lens } from "@/lib/lenses/registry";
+
+type Recognition = {
+  description: string;
+  candidateName: string | null;
+};
+
+type KymPayload = {
+  result: {
+    url: string;
+    title: string | null;
+    about: string | null;
+    origin: string | null;
+    spread: string | null;
+  } | null;
+  summary?: string;
+};
+
+const SCREEN_LABELS: Record<1 | 2 | 3, { title: string; subtitle: string }> = {
+  1: {
+    title: "Vernacular & semiotic foundation",
+    subtitle:
+      "What this meme is, where it comes from, what it's doing on the surface.",
+  },
+  2: {
+    title: "Critical theory lenses",
+    subtitle: "Six readings, run in parallel.",
+  },
+  3: {
+    title: "Infrastructural / technological lenses",
+    subtitle: "The meme as artifact of a technological order.",
+  },
+};
 
 export default function Page() {
   const [payload, setPayload] = useState<UploadPayload | null>(null);
-  const [recognition, setRecognition] = useState<{
-    description: string;
-    candidateName: string | null;
-  } | null>(null);
+
+  const [recognition, setRecognition] = useState<Recognition | null>(null);
+  const [recognitionStatus, setRecognitionStatus] = useState<
+    "idle" | "running" | "done" | "error"
+  >("idle");
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
-  const [recognizing, setRecognizing] = useState(false);
+
+  const [kym, setKym] = useState<KymPayload | null>(null);
+  const [kymStatus, setKymStatus] = useState<
+    "idle" | "skipped" | "running" | "done" | "error"
+  >("idle");
+  const [kymError, setKymError] = useState<string | null>(null);
+
+  const [lensOutputs, setLensOutputs] = useState<Record<string, string>>({});
+
+  const lensesByScreen = useMemo(() => {
+    const by: Record<1 | 2 | 3, Lens[]> = { 1: [], 2: [], 3: [] };
+    for (const l of LENSES) by[l.screen].push(l);
+    for (const k of [1, 2, 3] as const) by[k].sort((a, b) => a.order - b.order);
+    return by;
+  }, []);
 
   async function handleUpload(p: UploadPayload) {
     setPayload(p);
     setRecognition(null);
     setRecognitionError(null);
-    setRecognizing(true);
+    setRecognitionStatus("running");
+    setKym(null);
+    setKymError(null);
+    setKymStatus("idle");
+    setLensOutputs({});
+
     try {
       const res = await fetch("/api/analyze/recognize", {
         method: "POST",
@@ -31,57 +85,197 @@ export default function Page() {
         const text = await res.text();
         throw new Error(`Recognition failed: ${res.status} ${text}`);
       }
-      const data = await res.json();
+      const data = (await res.json()) as Recognition;
       setRecognition(data);
+      setRecognitionStatus("done");
+
+      if (data.candidateName) {
+        setKymStatus("running");
+        try {
+          const kymRes = await fetch("/api/analyze/kym", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: data.candidateName }),
+          });
+          if (!kymRes.ok) throw new Error(`KYM lookup: ${kymRes.status}`);
+          const kymData = (await kymRes.json()) as KymPayload;
+          setKym(kymData);
+          setKymStatus("done");
+        } catch (err) {
+          setKymError(err instanceof Error ? err.message : String(err));
+          setKymStatus("error");
+        }
+      } else {
+        setKymStatus("skipped");
+      }
     } catch (err) {
       setRecognitionError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRecognizing(false);
+      setRecognitionStatus("error");
     }
   }
 
+  const screen1Ready = recognitionStatus === "done";
+
+  function inputsForLens(lens: Lens): LensRunInputs | null {
+    if (!payload) return null;
+    if (lens.isSynthesis) {
+      const historical = lensOutputs["historical"];
+      const semiotic = lensOutputs["semiotic"];
+      if (!historical || !semiotic) return null;
+      return { kind: "synthesis", priorOutputs: { historical, semiotic } };
+    }
+    if (lens.id === "historical") {
+      // Wait for KYM resolution (done | skipped | error) so we don't race it.
+      if (kymStatus === "idle" || kymStatus === "running") return null;
+      return {
+        kind: "standard",
+        imageBase64: payload.imageBase64,
+        mediaType: payload.mediaType,
+        kym: kym?.summary ?? null,
+      };
+    }
+    return {
+      kind: "standard",
+      imageBase64: payload.imageBase64,
+      mediaType: payload.mediaType,
+      kym: null,
+    };
+  }
+
+  const handleLensComplete = (id: string) => (output: string) => {
+    setLensOutputs((prev) => ({ ...prev, [id]: output }));
+  };
+
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16 flex flex-col gap-12">
-      <header>
-        <h1 className="text-3xl font-serif">Memes as Stained Glass</h1>
-        <p className="mt-2 text-neutral-600">
-          Upload a meme. It will be read aloud by a cathedral docent.
+    <main className="mx-auto max-w-2xl px-6 py-16">
+      <header className="mb-12">
+        <h1 className="text-4xl font-serif tracking-tight">
+          Memes as Stained Glass
+        </h1>
+        <p className="mt-3 text-neutral-600">
+          Upload a meme. A cathedral docent will read it for you, in writing, across three screens.
         </p>
       </header>
 
       <Upload onUpload={handleUpload} />
 
-      {recognizing && (
-        <p className="text-neutral-500 italic">Recognizing…</p>
-      )}
-      {recognitionError && (
-        <p className="text-red-700">{recognitionError}</p>
-      )}
-      {recognition && (
-        <section className="border-l-2 border-neutral-300 pl-4 text-neutral-700">
-          <p className="text-sm uppercase tracking-wide text-neutral-500">
+      {recognitionStatus !== "idle" && (
+        <section className="mt-10 border-l-2 border-neutral-300 pl-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-neutral-400">
             Recognition
           </p>
-          <p className="mt-1">{recognition.description}</p>
-          {recognition.candidateName && (
-            <p className="mt-2 text-sm text-neutral-500">
-              Candidate name: {recognition.candidateName}
+          {recognitionStatus === "running" && (
+            <p className="mt-2 text-neutral-500 italic">
+              <ProgressDots /> looking at the image
+            </p>
+          )}
+          {recognitionStatus === "error" && (
+            <p className="mt-2 text-red-700">{recognitionError}</p>
+          )}
+          {recognition && (
+            <>
+              <p className="mt-2 text-neutral-800">{recognition.description}</p>
+              {recognition.candidateName && (
+                <p className="mt-2 text-sm text-neutral-500">
+                  Candidate name: <em>{recognition.candidateName}</em>
+                </p>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {recognitionStatus === "done" && (
+        <section className="mt-6 border-l-2 border-neutral-300 pl-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-neutral-400">
+            KnowYourMeme
+          </p>
+          {kymStatus === "running" && (
+            <p className="mt-2 text-neutral-500 italic">
+              <ProgressDots /> searching the archive
+            </p>
+          )}
+          {kymStatus === "skipped" && (
+            <p className="mt-2 text-neutral-500 italic">
+              skipped — no candidate name to look up
+            </p>
+          )}
+          {kymStatus === "error" && (
+            <p className="mt-2 text-neutral-500 italic">
+              archive unavailable ({kymError}) — historical lens will proceed without it
+            </p>
+          )}
+          {kymStatus === "done" && kym?.result && (
+            <div className="mt-2 text-neutral-700 text-sm">
+              <p>
+                Matched:{" "}
+                <a
+                  href={kym.result.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  {kym.result.title ?? kym.result.url}
+                </a>
+              </p>
+              {kym.result.about && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-neutral-500 text-xs uppercase tracking-wider">
+                    excerpt
+                  </summary>
+                  <p className="mt-2 whitespace-pre-wrap leading-relaxed">
+                    {kym.result.about.slice(0, 800)}
+                    {kym.result.about.length > 800 ? "…" : ""}
+                  </p>
+                </details>
+              )}
+            </div>
+          )}
+          {kymStatus === "done" && !kym?.result && (
+            <p className="mt-2 text-neutral-500 italic">
+              no entry found — historical lens will proceed without it
             </p>
           )}
         </section>
       )}
 
-      {payload && recognition && (
-        <section>
-          <div className="bg-neutral-200 aspect-[4/3] mb-6" aria-label="manuscript placeholder" />
-          <h2 className="text-xl mb-3">Cyberfeminist</h2>
-          <LensPanel
-            lensId="cyberfeminist"
-            imageBase64={payload.imageBase64}
-            mediaType={payload.mediaType}
-          />
-        </section>
+      {screen1Ready && payload && (
+        <>
+          {([1, 2, 3] as const).map((screenNum) => (
+            <Screen
+              key={screenNum}
+              index={screenNum}
+              title={SCREEN_LABELS[screenNum].title}
+              subtitle={SCREEN_LABELS[screenNum].subtitle}
+            >
+              {lensesByScreen[screenNum].map((lens) => (
+                <div key={lens.id}>
+                  <div
+                    className="bg-neutral-200 aspect-[4/3] mb-6"
+                    aria-label="manuscript visual placeholder"
+                  />
+                  <LensPanel
+                    lensId={lens.id}
+                    displayName={lens.displayName}
+                    primerPath={lens.primerPath}
+                    inputs={inputsForLens(lens)}
+                    onComplete={handleLensComplete(lens.id)}
+                  />
+                </div>
+              ))}
+            </Screen>
+          ))}
+        </>
       )}
     </main>
   );
+}
+
+function ProgressDots() {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setN((x) => (x + 1) % 4), 350);
+    return () => clearInterval(t);
+  }, []);
+  return <span className="tabular-nums">{".".repeat(n)}</span>;
 }
