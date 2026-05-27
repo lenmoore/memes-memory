@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import MarkdownBody from "@/components/MarkdownBody";
 import ManuscriptReading from "@/components/ManuscriptReading";
 import type { LensReading } from "@/lib/lenses/reading";
 
@@ -170,7 +171,9 @@ export default function LensPanel({
           <summary className="cursor-pointer text-xs uppercase tracking-wider text-neutral-400">
             primer fed to the model
           </summary>
-          <pre className="whitespace-pre-wrap font-serif mt-2">{primerText}</pre>
+          <MarkdownBody className="mt-2 text-sm text-neutral-700 leading-relaxed">
+            {primerText}
+          </MarkdownBody>
         </details>
       )}
 

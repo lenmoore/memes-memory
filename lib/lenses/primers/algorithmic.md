@@ -28,3 +28,38 @@ The algorithmic lens reads the meme as shaped by the recommender systems that se
 - "This meme exists because TikTok's first-second retention curve rewards a hook this specific; a longer-burning version of the same joke was made and did not survive."
 - "Read the meme as the algorithm's child, and the cathedral framing inverts: the lord did not produce the icon, but the lord's selection pressure did."
 - "What the algorithm filtered out is invisible by definition, but the missing memes are the strongest evidence the lens has — name the absences before reading the presences."
+
+## Algorithms of Oppression
+
+*Algorithms of Oppression: How Search Engines Reinforce Racism* is a nonfiction book by Safiya Umoja Noble, first published by NYU Press in 2018. It examines how commercial search engines—especially Google—reproduce and amplify racism and sexism rather than offering neutral access to information.
+
+### Key facts
+
+* **Author:** Safiya Umoja Noble
+* **Publication year:** 2018 (NYU Press)
+* **Subject:** Algorithmic bias, search engines, race, gender
+* **Central case study:** Google searches, especially for terms about Black girls and women
+* **Audience:** Scholars, technologists, policymakers, and general readers interested in tech and social justice
+
+### Background and purpose
+
+Noble wrote the book after repeatedly seeing dehumanizing, pornographic results when searching terms like “Black girls” in Google, even when she personally used the web for Black feminist content. She argues these results are not glitches but symptoms of how profit-driven search systems encode and reflect dominant power relations, particularly anti-Black racism and misogyny.
+
+### Core arguments
+
+The book contends that search engines are cultural and political institutions, not neutral tools. Algorithms rank information in ways that prioritize advertising revenue, SEO gaming, and dominant groups’ interests. This produces “technological redlining,” where marginalized people—especially Black women—are misrepresented, hypersexualized, or made invisible altogether. Noble links these representations to real-world harms, such as stereotyping, discriminatory policing, and extremist radicalization.
+
+### Structure and themes
+
+Across its chapters, the book analyzes:
+
+* Search results about Black girls and women
+* How search may have shaped white supremacist Dylann Roof’s radicalization
+* Library science, classification, and the politics of knowledge
+* Regulatory and policy gaps around Big Tech governance
+
+Throughout, Noble situates search engines within longer histories of racial capitalism, media bias, and information control.
+
+### Reception and impact
+
+*Algorithms of Oppression* has become a foundational text in discussions of algorithmic bias, critical data studies, and tech ethics. It’s widely used in university courses and is frequently cited in policy debates about regulating dominant platforms like Google. The work also helped cement Noble’s role as a leading voice on algorithmic discrimination, contributing to recognition such as her MacArthur Fellowship.

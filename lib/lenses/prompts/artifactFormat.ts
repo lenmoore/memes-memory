@@ -33,7 +33,7 @@ export function buildArtifactGuidance(lens: Lens): string {
     "Scenes and objects the lens pulls out of the meme — not a repeat of its faces.";
 
   return `Visual artifact rules (${lens.displayName} lens):
-- Artifacts are briefs for a future illuminator. One or two sentences each — specific, visual, literate.
+- Artifacts are brief visual descriptions. One or two sentences each — specific, concrete, literate.
 - Do NOT describe the same figure twice. Do NOT copy the meme panel three times with new adjectives.
 - At most ONE artifact may name a literal meme element (a face, animal, prop from the image). The rest must extrapolate.
 - Extrapolate the meme's structure into other scenes: human work, ritual, history, architecture, objects, crowds — as this lens would see them.

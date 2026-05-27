@@ -36,7 +36,7 @@ export const LENSES: Lens[] = [
   { id: "hauntology_content", screen: 2, displayName: "Hauntology (Content)",
     primerPath: "hauntology_content.md", order: 5,
     selectionHint: "Lost futures, nostalgia, spectral repetition, cultural decay, retro aesthetics" },
-  { id: "trauma",             screen: 2, displayName: "Trauma / Medical",
+  { id: "trauma",             screen: 2, displayName: "Trauma / medical / affective",
     primerPath: "trauma.md",             order: 6,
     selectionHint: "Psychic wound, diagnostic language, coping registers, body-as-symptom" },
 
