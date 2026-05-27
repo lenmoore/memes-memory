@@ -201,8 +201,9 @@ export default function Page() {
   );
 
   const screen1Ready = memeGate.approved;
+  const screen1HistoricalDone = Boolean(lensOutputs["historical"]);
   const screen1Complete =
-    Boolean(lensOutputs["historical"]) &&
+    screen1HistoricalDone &&
     Boolean(lensOutputs["semiotic"]) &&
     Boolean(lensOutputs["synthesis"]);
 
@@ -211,6 +212,17 @@ export default function Page() {
     if (!selectedScreen2Ids) return [];
     return all.filter((l) => selectedScreen2Ids.includes(l.id));
   }, [selectedScreen2Ids]);
+
+  const screen2Complete = useMemo(() => {
+    if (screen2Lenses.length === 0) return false;
+    return screen2Lenses.every((l) => Boolean(lensOutputs[l.id]));
+  }, [screen2Lenses, lensOutputs]);
+
+  function screenPipelineReady(screenNum: 1 | 2 | 3): boolean {
+    if (screenNum === 1) return screen1Ready;
+    if (screenNum === 2) return screen1Complete && selectedScreen2Ids !== null;
+    return screen2Complete;
+  }
 
   useEffect(() => {
     if (!recognition || !screen1Complete) {
@@ -314,6 +326,7 @@ export default function Page() {
       };
     }
     if (lens.id === "semiotic") {
+      if (!screen1HistoricalDone) return null;
       if (
         reverseSearchStatus === "idle" ||
         reverseSearchStatus === "running"
@@ -328,7 +341,12 @@ export default function Page() {
         webContext: reverseSearch?.summary ?? null,
       };
     }
-    if (lens.screen === 2 && !selectedScreen2Ids?.includes(lens.id)) {
+    if (lens.screen === 2) {
+      if (!screen1Complete || !selectedScreen2Ids?.includes(lens.id)) {
+        return null;
+      }
+    }
+    if (lens.screen === 3 && !screen2Complete) {
       return null;
     }
     return {
@@ -536,17 +554,23 @@ export default function Page() {
                       {lensSelectionRationale}
                     </p>
                   )}
-                {lensesForScreen(screenNum).map((lens) => (
-                  <div key={lens.id}>
-                    <LensPanel
-                      lensId={lens.id}
-                      displayName={lens.displayName}
-                      primerPath={lens.primerPath}
-                      inputs={inputsForLens(lens)}
-                      onComplete={handleLensComplete(lens.id)}
-                    />
-                  </div>
-                ))}
+                {screenNum === 3 && screen1Complete && !screen2Complete && (
+                  <p className="text-neutral-500 italic -mt-4 mb-6">
+                    <ProgressDots /> waiting for screen 2 before infrastructural lenses
+                  </p>
+                )}
+                {screenPipelineReady(screenNum) &&
+                  lensesForScreen(screenNum).map((lens) => (
+                    <div key={lens.id}>
+                      <LensPanel
+                        lensId={lens.id}
+                        displayName={lens.displayName}
+                        primerPath={lens.primerPath}
+                        inputs={inputsForLens(lens)}
+                        onComplete={handleLensComplete(lens.id)}
+                      />
+                    </div>
+                  ))}
               </Screen>
             </div>
           ))}

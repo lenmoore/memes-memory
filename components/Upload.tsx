@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveImageMediaType } from "@/lib/imageMediaType";
 import { useRef, useState } from "react";
 
 export type UploadPayload = {
@@ -44,13 +45,16 @@ export default function Upload({
 
   async function handleFile(file: File) {
     setError(null);
-    if (!ACCEPTED.includes(file.type)) {
-      setError(`Unsupported file type: ${file.type || "(unknown)"}`);
-      return;
-    }
     setBusy(true);
     try {
       const buf = await file.arrayBuffer();
+      const mediaType = resolveImageMediaType(new Uint8Array(buf), file.type);
+      if (!mediaType) {
+        setError(
+          `Unsupported image format${file.type ? ` (browser reported ${file.type})` : ""}`,
+        );
+        return;
+      }
       const [hash, b64] = await Promise.all([
         sha256Hex(buf),
         Promise.resolve(bytesToBase64(buf)),
@@ -59,7 +63,7 @@ export default function Upload({
       setPreviewUrl(url);
       onUpload({
         imageBase64: b64,
-        mediaType: file.type,
+        mediaType,
         hash,
         previewUrl: url,
         fileName: file.name,

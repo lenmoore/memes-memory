@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getClient } from "@/lib/anthropic";
+import { resolveImageMediaTypeFromBase64 } from "@/lib/imageMediaType";
 import { getLens } from "@/lib/lenses/registry";
 import {
   lensReadingToPlainText,
@@ -117,15 +118,18 @@ ${buildSynthesisReadingJsonFormat()}`,
     if (!body.imageBase64 || !body.mediaType) {
       return new Response("Missing image", { status: 400 });
     }
+    const mediaType = resolveImageMediaTypeFromBase64(
+      body.imageBase64,
+      body.mediaType,
+    );
+    if (!mediaType) {
+      return new Response("Unrecognized image format", { status: 400 });
+    }
     userContent.push({
       type: "image",
       source: {
         type: "base64",
-        media_type: body.mediaType as
-          | "image/jpeg"
-          | "image/png"
-          | "image/gif"
-          | "image/webp",
+        media_type: mediaType,
         data: body.imageBase64,
       },
     });

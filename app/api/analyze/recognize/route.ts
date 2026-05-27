@@ -1,5 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getClient } from "@/lib/anthropic";
+import {
+  resolveImageMediaTypeFromBase64,
+  type AcceptedImageMediaType,
+} from "@/lib/imageMediaType";
 import type { Recognition } from "@/lib/recognition";
 
 export const runtime = "nodejs";
@@ -47,10 +51,17 @@ function normalizeRecognition(raw: Record<string, unknown>): Recognition {
 }
 
 export async function POST(req: Request) {
-  const { imageBase64, mediaType } = (await req.json()) as {
+  const { imageBase64, mediaType: declared } = (await req.json()) as {
     imageBase64: string;
     mediaType: string;
   };
+  const mediaType = resolveImageMediaTypeFromBase64(imageBase64, declared);
+  if (!mediaType) {
+    return Response.json(
+      { error: "Unsupported or unrecognized image format" },
+      { status: 400 },
+    );
+  }
   const client = getClient();
 
   const message = await client.messages.create({
@@ -90,11 +101,7 @@ Return only the JSON object, no surrounding prose.`,
             type: "image",
             source: {
               type: "base64",
-              media_type: mediaType as
-                | "image/jpeg"
-                | "image/png"
-                | "image/gif"
-                | "image/webp",
+              media_type: mediaType satisfies AcceptedImageMediaType,
               data: imageBase64,
             },
           },
