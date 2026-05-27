@@ -5,10 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildReadingFlow,
   buildVisibleLines,
+  computeManuscriptLayout,
   EMBED_SETTLE_MS,
+  embedsForLayout,
   layoutCharacterCount,
   TYPEWRITER_CHARS_PER_SECOND,
   visualEmbedFrame,
+  type ManuscriptLayout,
 } from "@/lib/manuscript/readingFlow";
 import type { LensReading } from "@/lib/lenses/reading";
 
@@ -24,21 +27,22 @@ type ImageState = {
 
 type EmbedPhase = "loading" | "visible" | "inFlow";
 
-const MIN_COLUMN_WIDTH = 320;
-
 function runFlowLayout(
   flowInput: ReturnType<typeof buildReadingFlow>,
-  columnWidth: number,
+  manuscriptLayout: ManuscriptLayout,
   text: string,
   embedIds: Set<string>,
 ): FlowResult | null {
   if (!text.trim() && embedIds.size === 0) return null;
 
-  const embeds = flowInput.embeds.filter((embed) => embedIds.has(embed.id));
+  const embeds = embedsForLayout(
+    flowInput.embeds.filter((embed) => embedIds.has(embed.id)),
+    manuscriptLayout,
+  );
   return flowLayout({
     text,
     font: flowInput.font,
-    width: columnWidth,
+    width: manuscriptLayout.canvasWidth,
     lineHeight: flowInput.lineHeight,
     embeds,
     paragraphGap: flowInput.paragraphGap,
@@ -49,6 +53,7 @@ function computeContainerHeight(
   layout: FlowResult | null,
   flowInput: ReturnType<typeof buildReadingFlow>,
   sideById: Map<string, "left" | "right">,
+  manuscriptLayout: ManuscriptLayout,
 ): number {
   let height = layout?.height ?? 120;
 
@@ -58,7 +63,7 @@ function computeContainerHeight(
     const resolved = layout.embeds.find((item) => item.id === embed.id);
     if (!resolved) continue;
     const side = sideById.get(embed.id) ?? "left";
-    const frame = visualEmbedFrame(side, resolved.rect);
+    const frame = visualEmbedFrame(side, resolved.rect, manuscriptLayout);
     height = Math.max(height, frame.top + frame.height);
   }
 
@@ -67,7 +72,7 @@ function computeContainerHeight(
 
 export default function ManuscriptReading({ reading, onSettled }: Props) {
   const measureRef = useRef<HTMLDivElement>(null);
-  const [columnWidth, setColumnWidth] = useState(640);
+  const [contentWidth, setContentWidth] = useState(640);
   const [revealedChars, setRevealedChars] = useState(0);
   const [images, setImages] = useState<Record<string, ImageState>>({});
   const [embedPhases, setEmbedPhases] = useState<Record<string, EmbedPhase>>(
@@ -84,9 +89,15 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
     [flowInput.embeds],
   );
 
+  const manuscriptLayout = useMemo(
+    () => computeManuscriptLayout(contentWidth, flowInput.artifacts),
+    [contentWidth, flowInput.artifacts],
+  );
+
   const fullLayout = useMemo(
-    () => runFlowLayout(flowInput, columnWidth, flowInput.text, allEmbedIds),
-    [flowInput, columnWidth, allEmbedIds],
+    () =>
+      runFlowLayout(flowInput, manuscriptLayout, flowInput.text, allEmbedIds),
+    [flowInput, manuscriptLayout, allEmbedIds],
   );
 
   const layoutCharCount = useMemo(
@@ -109,7 +120,7 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
 
     const measure = () => {
       const next = node.clientWidth;
-      if (next > 0) setColumnWidth(Math.max(MIN_COLUMN_WIDTH, next));
+      if (next > 0) setContentWidth(next);
     };
 
     measure();
@@ -257,8 +268,14 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
   }, [flowInput.artifacts]);
 
   const layoutHeight = useMemo(
-    () => computeContainerHeight(fullLayout, flowInput, sideById),
-    [fullLayout, flowInput, sideById],
+    () =>
+      computeContainerHeight(
+        fullLayout,
+        flowInput,
+        sideById,
+        manuscriptLayout,
+      ),
+    [fullLayout, flowInput, sideById, manuscriptLayout],
   );
 
   const embedsSettled =
@@ -288,12 +305,17 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
     revealedChars < layoutCharCount;
 
   return (
-    <div className="manuscript-reading relative overflow-visible -mx-20 px-20">
+    <div className="manuscript-reading relative overflow-visible">
       <div ref={measureRef} className="h-0 w-full" aria-hidden="true" />
 
       <div
         className="relative"
-        style={{ height: layoutHeight, minHeight: layoutHeight }}
+        style={{
+          height: layoutHeight,
+          minHeight: layoutHeight,
+          width: manuscriptLayout.canvasWidth,
+          marginLeft: manuscriptLayout.canvasOffset,
+        }}
       >
         {flowInput.embeds.map((embed) => {
           const phase = embedPhases[embed.id] ?? "loading";
@@ -306,7 +328,7 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
 
           if (!rectSource || !visible) return null;
 
-          const frame = visualEmbedFrame(side, rectSource.rect);
+          const frame = visualEmbedFrame(side, rectSource.rect, manuscriptLayout);
 
           return (
             <div

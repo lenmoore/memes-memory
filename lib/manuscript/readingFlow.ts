@@ -10,6 +10,7 @@ export const ARTIFACT_FLOW_MARGIN = 36;
 
 export const TYPEWRITER_CHARS_PER_SECOND = 90;
 export const EMBED_SETTLE_MS = 600;
+export const MIN_TEXT_COLUMN_WIDTH = 240;
 
 export type ArtifactMeta = {
   id: string;
@@ -141,10 +142,99 @@ export type EmbedVisualFrame = {
   objectPosition: "left center" | "right center";
 };
 
+export type ManuscriptLayoutMode = "rails" | "stacked";
+
+export type ManuscriptLayout = {
+  mode: ManuscriptLayoutMode;
+  contentWidth: number;
+  canvasWidth: number;
+  canvasOffset: number;
+  textColumnWidth: number;
+  hasLeftRail: boolean;
+  hasRightRail: boolean;
+};
+
+export function embedVisualFramesOverlap(
+  left: { left: number; right: number },
+  right: { left: number; right: number },
+): boolean {
+  return left.right > right.left;
+}
+
+export function computeManuscriptLayout(
+  contentWidth: number,
+  artifacts: ArtifactMeta[],
+): ManuscriptLayout {
+  const safeWidth = Math.max(0, contentWidth);
+  const hasLeftRail = artifacts.some((artifact) => artifact.side === "left");
+  const hasRightRail = artifacts.some((artifact) => artifact.side === "right");
+  const dualRails = hasLeftRail && hasRightRail;
+
+  const minRailsWidth =
+    (hasLeftRail ? ARTIFACT_IMAGE_WIDTH + ARTIFACT_FLOW_MARGIN : 0) +
+    (hasRightRail ? ARTIFACT_IMAGE_WIDTH + ARTIFACT_FLOW_MARGIN : 0) +
+    MIN_TEXT_COLUMN_WIDTH;
+
+  const expandedWidth = safeWidth + 2 * ARTIFACT_OUTSET;
+  const canUseRails = !dualRails || expandedWidth >= minRailsWidth;
+
+  if (!canUseRails) {
+    return {
+      mode: "stacked",
+      contentWidth: safeWidth,
+      canvasWidth: safeWidth,
+      canvasOffset: 0,
+      textColumnWidth: safeWidth,
+      hasLeftRail,
+      hasRightRail,
+    };
+  }
+
+  return {
+    mode: "rails",
+    contentWidth: safeWidth,
+    canvasWidth: expandedWidth,
+    canvasOffset: -ARTIFACT_OUTSET,
+    textColumnWidth:
+      expandedWidth -
+      (hasLeftRail ? ARTIFACT_IMAGE_WIDTH + ARTIFACT_FLOW_MARGIN : 0) -
+      (hasRightRail ? ARTIFACT_IMAGE_WIDTH + ARTIFACT_FLOW_MARGIN : 0),
+    hasLeftRail,
+    hasRightRail,
+  };
+}
+
+export function embedsForLayout(
+  embeds: Embed[],
+  layout: ManuscriptLayout,
+): Embed[] {
+  if (layout.mode === "stacked") {
+    return embeds.map((embed) => ({
+      ...embed,
+      position:
+        embed.position.type === "flow"
+          ? { ...embed.position, side: "center" as const }
+          : embed.position,
+    }));
+  }
+  return embeds;
+}
+
 export function visualEmbedFrame(
   side: VisualArtifactSide,
   rect: { x: number; y: number; width: number; height: number },
+  layout: ManuscriptLayout,
 ): EmbedVisualFrame {
+  if (layout.mode === "stacked") {
+    return {
+      left: rect.x,
+      top: rect.y,
+      width: rect.width,
+      height: rect.height,
+      objectPosition: "left center",
+    };
+  }
+
   if (side === "left") {
     return {
       left: rect.x - ARTIFACT_OUTSET,
