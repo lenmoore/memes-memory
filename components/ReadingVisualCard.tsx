@@ -1,10 +1,11 @@
 "use client";
 
-import type { LensReading } from "@/lib/lenses/reading";
+import type { LensReading, VisualArtifactSide } from "@/lib/lenses/reading";
 import {
   readingDisplayTitle,
   readingProvocativePoints,
 } from "@/lib/lenses/reading";
+
 type ImageState = {
   status: "idle" | "loading" | "done" | "skipped" | "error";
   url: string | null;
@@ -13,6 +14,7 @@ type ImageState = {
 type ArtifactSlot = {
   id: string;
   description: string;
+  side: VisualArtifactSide;
 };
 
 type Props = {
@@ -41,13 +43,21 @@ function GlossLine({ text, isFirst }: { text: string; isFirst: boolean }) {
   );
 }
 
-function MiniatureFrame({
+function Miniature({
   image,
+  side,
+  index,
 }: {
   image: ImageState | undefined;
+  side: VisualArtifactSide;
+  index: number;
 }) {
   return (
-    <figure className="reading-miniature">
+    <figure
+      className={`reading-miniature reading-miniature--${side}`}
+      data-slot={index}
+      style={{ animationDelay: `${index * 120}ms` }}
+    >
       {image?.status === "done" && image.url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={image.url} alt="" className="reading-miniature-img" />
@@ -71,46 +81,43 @@ export default function ReadingVisualCard({
   const points = readingProvocativePoints(reading);
   const showImages = generateImages && artifacts.length > 0;
   const showPoints = points.length > 0;
+  const imageCount = showImages ? artifacts.length : 0;
 
   if (!title && !showImages && !showPoints) return null;
+
+  const bodyClass = [
+    "reading-folio-body",
+    imageCount > 0 ? `reading-folio-body--images-${Math.min(imageCount, 3)}` : "",
+    showPoints ? "reading-folio-body--has-gloss" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <section className="reading-folio mb-10" aria-label="Illuminated summary">
       <div className="reading-folio-inner">
         {title && <h4 className="reading-rubric">{title}</h4>}
 
-        {(title && (showImages || showPoints)) && (
+        {title && (showImages || showPoints) && (
           <div className="reading-folio-fleuron" aria-hidden="true">
             ❧
           </div>
         )}
 
         {(showImages || showPoints) && (
-          <div
-            className={`reading-folio-body${
-              showImages ? " reading-folio-body--with-margin" : ""
-            }`}
-          >
-            {showImages && (
-              <aside
-                className="reading-margin-column"
-                aria-label="Margin miniatures"
-              >
-                <div className="reading-miniature-stack">
-                  {artifacts.map((artifact, index) => (
-                    <div key={artifact.id} className="reading-miniature-wrap">
-                      {index > 0 && (
-                        <div className="reading-miniature-rule" aria-hidden="true" />
-                      )}
-                      <MiniatureFrame image={images[artifact.id]} />
-                    </div>
-                  ))}
-                </div>
-              </aside>
-            )}
+          <div className={bodyClass}>
+            {showImages &&
+              artifacts.map((artifact, index) => (
+                <Miniature
+                  key={artifact.id}
+                  image={images[artifact.id]}
+                  side={artifact.side}
+                  index={index}
+                />
+              ))}
 
             {showPoints && (
-              <div className="reading-gloss-column">
+              <div className="reading-gloss-flow">
                 {points.map((point, index) => (
                   <GlossLine
                     key={point}
