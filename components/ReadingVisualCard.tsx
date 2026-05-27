@@ -1,0 +1,128 @@
+"use client";
+
+import type { LensReading } from "@/lib/lenses/reading";
+import {
+  readingDisplayTitle,
+  readingProvocativePoints,
+} from "@/lib/lenses/reading";
+type ImageState = {
+  status: "idle" | "loading" | "done" | "skipped" | "error";
+  url: string | null;
+};
+
+type ArtifactSlot = {
+  id: string;
+  description: string;
+};
+
+type Props = {
+  reading: LensReading;
+  lensDisplayName: string;
+  artifacts: ArtifactSlot[];
+  images: Record<string, ImageState>;
+  generateImages: boolean;
+};
+
+function GlossLine({ text, isFirst }: { text: string; isFirst: boolean }) {
+  if (!isFirst) {
+    return <p className="reading-gloss-line">{text}</p>;
+  }
+
+  const initial = text.charAt(0);
+  const rest = text.slice(1).trimStart();
+
+  return (
+    <p className="reading-gloss-line reading-gloss-line-first">
+      <span className="reading-gloss-initial" aria-hidden="true">
+        {initial}
+      </span>
+      <span>{rest}</span>
+    </p>
+  );
+}
+
+function MiniatureFrame({
+  image,
+}: {
+  image: ImageState | undefined;
+}) {
+  return (
+    <figure className="reading-miniature">
+      {image?.status === "done" && image.url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image.url} alt="" className="reading-miniature-img" />
+      ) : (
+        <div className="reading-miniature-placeholder">
+          {image?.status === "loading" ? "illuminating…" : ""}
+        </div>
+      )}
+    </figure>
+  );
+}
+
+export default function ReadingVisualCard({
+  reading,
+  lensDisplayName,
+  artifacts,
+  images,
+  generateImages,
+}: Props) {
+  const title = readingDisplayTitle(reading, lensDisplayName);
+  const points = readingProvocativePoints(reading);
+  const showImages = generateImages && artifacts.length > 0;
+  const showPoints = points.length > 0;
+
+  if (!title && !showImages && !showPoints) return null;
+
+  return (
+    <section className="reading-folio mb-10" aria-label="Illuminated summary">
+      <div className="reading-folio-inner">
+        {title && <h4 className="reading-rubric">{title}</h4>}
+
+        {(title && (showImages || showPoints)) && (
+          <div className="reading-folio-fleuron" aria-hidden="true">
+            ❧
+          </div>
+        )}
+
+        {(showImages || showPoints) && (
+          <div
+            className={`reading-folio-body${
+              showImages ? " reading-folio-body--with-margin" : ""
+            }`}
+          >
+            {showImages && (
+              <aside
+                className="reading-margin-column"
+                aria-label="Margin miniatures"
+              >
+                <div className="reading-miniature-stack">
+                  {artifacts.map((artifact, index) => (
+                    <div key={artifact.id} className="reading-miniature-wrap">
+                      {index > 0 && (
+                        <div className="reading-miniature-rule" aria-hidden="true" />
+                      )}
+                      <MiniatureFrame image={images[artifact.id]} />
+                    </div>
+                  ))}
+                </div>
+              </aside>
+            )}
+
+            {showPoints && (
+              <div className="reading-gloss-column">
+                {points.map((point, index) => (
+                  <GlossLine
+                    key={point}
+                    text={point}
+                    isFirst={index === 0}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}

@@ -98,8 +98,15 @@ export default function LensPanel({
           signal: controller.signal,
         });
         if (!res.ok) {
-          const errText = await res.text();
-          setError(`${res.status} ${errText || res.statusText}`);
+          const errBody = await res.text();
+          let errText = errBody || res.statusText;
+          try {
+            const errJson = JSON.parse(errBody) as { error?: string };
+            if (errJson.error) errText = errJson.error;
+          } catch {
+            // use raw body
+          }
+          setError(`${res.status} ${errText}`);
           setStatus("error");
           return;
         }
@@ -185,6 +192,7 @@ export default function LensPanel({
         {reading && (
           <ManuscriptReading
             reading={reading}
+            lensDisplayName={displayName}
             generateImages={generateImages}
             onSettled={() => {
               setDisplaySettled(true);

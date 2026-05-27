@@ -1,21 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import ReadingVisualCard from "@/components/ReadingVisualCard";
 import {
   buildReadingContent,
   buildVisibleLines,
   computeManuscriptLayout,
-  EMBED_SETTLE_MS,
   layoutCharacterCount,
   layoutReading,
-  readingArtifacts,
+  readingArtifactsFromReading,
   TYPEWRITER_CHARS_PER_SECOND,
-  visualEmbedFrame,
 } from "@/lib/manuscript/readingFlow";
 import type { LensReading } from "@/lib/lenses/reading";
 
 type Props = {
   reading: LensReading;
+  lensDisplayName: string;
   generateImages?: boolean;
   onSettled?: () => void;
 };
@@ -24,8 +24,6 @@ type ImageState = {
   status: "idle" | "loading" | "done" | "skipped" | "error";
   url: string | null;
 };
-
-type EmbedPhase = "loading" | "visible" | "inFlow";
 
 function createTextMeasurer(font: string): (value: string) => number {
   if (typeof document === "undefined") {
@@ -44,6 +42,7 @@ function createTextMeasurer(font: string): (value: string) => number {
 
 export default function ManuscriptReading({
   reading,
+  lensDisplayName,
   generateImages = false,
   onSettled,
 }: Props) {
@@ -51,20 +50,17 @@ export default function ManuscriptReading({
   const [contentWidth, setContentWidth] = useState(640);
   const [revealedChars, setRevealedChars] = useState(0);
   const [images, setImages] = useState<Record<string, ImageState>>({});
-  const [embedPhases, setEmbedPhases] = useState<Record<string, EmbedPhase>>(
-    {},
-  );
-  const settleTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
-    new Map(),
-  );
   const settledRef = useRef(false);
 
-  const readingContent = useMemo(() => buildReadingContent(reading), [reading]);
-  const artifacts = useMemo(
-    () => readingArtifacts(readingContent),
-    [readingContent],
+  const readingContent = useMemo(
+    () => buildReadingContent(reading, { includeArtifactsInText: false }),
+    [reading],
   );
-  const layoutArtifacts = generateImages ? artifacts : [];
+  const artifacts = useMemo(
+    () => readingArtifactsFromReading(reading),
+    [reading],
+  );
+  const layoutArtifacts: typeof artifacts = [];
 
   const manuscriptLayout = useMemo(
     () => computeManuscriptLayout(contentWidth, layoutArtifacts),
@@ -109,13 +105,7 @@ export default function ManuscriptReading({
 
   useEffect(() => {
     setRevealedChars(0);
-    setEmbedPhases({});
     setImages({});
-
-    for (const timer of settleTimersRef.current.values()) {
-      clearTimeout(timer);
-    }
-    settleTimersRef.current.clear();
   }, [reading]);
 
   useEffect(() => {
@@ -151,14 +141,11 @@ export default function ManuscriptReading({
 
     let cancelled = false;
     const next: Record<string, ImageState> = {};
-    const phases: Record<string, EmbedPhase> = {};
 
     for (const artifact of artifacts) {
       next[artifact.id] = { status: "loading", url: null };
-      phases[artifact.id] = "loading";
     }
     setImages(next);
-    setEmbedPhases(phases);
 
     for (const artifact of artifacts) {
       (async () => {
@@ -173,10 +160,6 @@ export default function ManuscriptReading({
             setImages((prev) => ({
               ...prev,
               [artifact.id]: { status: "skipped", url: null },
-            }));
-            setEmbedPhases((prev) => ({
-              ...prev,
-              [artifact.id]: "inFlow",
             }));
             return;
           }
@@ -200,20 +183,6 @@ export default function ManuscriptReading({
             ...prev,
             [artifact.id]: { status: "done", url: data.url ?? null },
           }));
-          setEmbedPhases((prev) => ({
-            ...prev,
-            [artifact.id]: "visible",
-          }));
-
-          const timer = setTimeout(() => {
-            if (cancelled) return;
-            setEmbedPhases((prev) => ({
-              ...prev,
-              [artifact.id]: "inFlow",
-            }));
-            settleTimersRef.current.delete(artifact.id);
-          }, EMBED_SETTLE_MS);
-          settleTimersRef.current.set(artifact.id, timer);
         } catch {
           if (!cancelled) {
             setImages((prev) => ({
@@ -227,10 +196,6 @@ export default function ManuscriptReading({
 
     return () => {
       cancelled = true;
-      for (const timer of settleTimersRef.current.values()) {
-        clearTimeout(timer);
-      }
-      settleTimersRef.current.clear();
     };
   }, [artifacts, reading, generateImages]);
 
@@ -240,18 +205,16 @@ export default function ManuscriptReading({
   );
 
   const embedsSettled =
+    !generateImages ||
     artifacts.length === 0 ||
-    (!generateImages
-      ? false
-      : artifacts.every((artifact) => {
-          const phase = embedPhases[artifact.id];
-          const image = images[artifact.id];
-          return (
-            phase === "inFlow" ||
-            image?.status === "skipped" ||
-            image?.status === "error"
-          );
-        }));
+    artifacts.every((artifact) => {
+      const image = images[artifact.id];
+      return (
+        image?.status === "done" ||
+        image?.status === "skipped" ||
+        image?.status === "error"
+      );
+    });
 
   const animationSettled = typewriterDone && embedsSettled;
 
@@ -268,6 +231,14 @@ export default function ManuscriptReading({
 
   return (
     <div className="manuscript-reading relative overflow-visible">
+      <ReadingVisualCard
+        reading={reading}
+        lensDisplayName={lensDisplayName}
+        artifacts={artifacts}
+        images={images}
+        generateImages={generateImages}
+      />
+
       <div ref={measureRef} className="h-0 w-full" aria-hidden="true" />
 
       <div
@@ -279,48 +250,6 @@ export default function ManuscriptReading({
           marginLeft: manuscriptLayout.canvasOffset,
         }}
       >
-        {fullLayout.embeds.map((embed) => {
-          const phase = embedPhases[embed.id] ?? "loading";
-          const image = images[embed.id];
-          const visible = phase === "visible" || phase === "inFlow";
-
-          if (!visible) return null;
-
-          const frame = visualEmbedFrame(
-            embed.side,
-            embed,
-            manuscriptLayout,
-          );
-
-          return (
-            <div
-              key={embed.id}
-              className="absolute z-10 pointer-events-none manuscript-artifact-enter"
-              style={{
-                left: frame.left,
-                top: frame.top,
-                width: frame.width,
-                height: frame.height,
-              }}
-              aria-hidden="true"
-            >
-              {image?.status === "done" && image.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={image.url}
-                  alt=""
-                  className="h-full w-full border-2 border-neutral-800 bg-[#e8e0d0] object-cover shadow-[4px_6px_0_rgba(0,0,0,0.08)]"
-                  style={{ objectPosition: frame.objectPosition }}
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center border-2 border-neutral-800 bg-[#e8e0d0] text-[0.65rem] uppercase tracking-wider text-neutral-500">
-                  {image?.status === "loading" ? "illuminating…" : ""}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
         {visibleLines.map((line) => (
           <span
             key={`${line.y}:${line.x}:${line.text}`}

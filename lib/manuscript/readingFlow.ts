@@ -4,6 +4,10 @@ export const ARTIFACT_IMAGE_WIDTH = 280;
 export const ARTIFACT_IMAGE_HEIGHT = Math.round(
   ARTIFACT_IMAGE_WIDTH * (16 / 9),
 );
+
+/** Margin miniatures in the illuminated folio summary card (portrait, manuscript scale). */
+export const FOLIO_MINIATURE_WIDTH = 152;
+export const FOLIO_MINIATURE_HEIGHT = Math.round(FOLIO_MINIATURE_WIDTH * (4 / 3));
 export const ARTIFACT_OUTSET = 80;
 export const ARTIFACT_FLOW_MARGIN = 36;
 
@@ -63,7 +67,35 @@ function stripMarkdown(markdown: string): string {
     .trim();
 }
 
-export function buildReadingContent(reading: LensReading): ReadingContent {
+export type BuildReadingContentOptions = {
+  /** When false, artifact sections are omitted from the typewriter layout (visual card only). */
+  includeArtifactsInText?: boolean;
+};
+
+export function readingArtifactsFromReading(
+  reading: LensReading,
+): ArtifactMeta[] {
+  let artifactIndex = 0;
+  const metas: ArtifactMeta[] = [];
+
+  for (const section of reading.sections) {
+    if (section.type !== "artifact") continue;
+    metas.push({
+      id: `artifact-${artifactIndex}`,
+      description: section.description,
+      side: section.side,
+    });
+    artifactIndex += 1;
+  }
+
+  return metas;
+}
+
+export function buildReadingContent(
+  reading: LensReading,
+  options?: BuildReadingContentOptions,
+): ReadingContent {
+  const includeArtifacts = options?.includeArtifactsInText !== false;
   const blocks: ReadingBlock[] = [];
   const boldLines = new Set<string>();
   let artifactIndex = 0;
@@ -86,6 +118,8 @@ export function buildReadingContent(reading: LensReading): ReadingContent {
       }
       continue;
     }
+
+    if (!includeArtifacts) continue;
 
     const id = `artifact-${artifactIndex}`;
     artifactIndex += 1;

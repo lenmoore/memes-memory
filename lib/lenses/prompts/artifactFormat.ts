@@ -46,14 +46,20 @@ export function buildArtifactGuidance(lens: Lens): string {
 export function buildReadingJsonFormat(lens: Lens): string {
   const artifactRules = buildArtifactGuidance(lens);
 
-  return `Return strict JSON only — no surrounding prose:
+  return `Return raw JSON only — no markdown code fences, no backticks, no surrounding prose:
 {
+  "title": "...",
+  "provocativePoints": ["...", "..."],
   "sections": [
     { "type": "prose", "markdown": "..." },
     { "type": "artifact", "label": "...", "description": "...", "side": "left" | "right" },
     ...
   ]
 }
+
+Top-level fields:
+- "title": 3–8 words. A museum placard headline for this reading — not the lens name, not the meme's internet title. Punchy and specific.
+- "provocativePoints": array of 1–3 strings. The sharpest claims from your reading — declarative, provocative, under 22 words each. No hedging, no "arguably". Extract the lines a visitor would quote; do not repeat the title verbatim.
 
 Section rules:
 - "sections" is an ordered array mixing prose and artifact blocks.
@@ -67,13 +73,19 @@ ${artifactRules}
 }
 
 export function buildSynthesisReadingJsonFormat(): string {
-  return `Return strict JSON only — no surrounding prose:
+  return `Return raw JSON only — no markdown code fences, no backticks, no surrounding prose:
 {
+  "title": "...",
+  "provocativePoints": ["..."],
   "sections": [
     { "type": "prose", "markdown": "..." },
     { "type": "artifact", "label": "...", "description": "...", "side": "left" | "right" }
   ]
 }
+
+Top-level fields:
+- "title": 3–8 words. Plain-language placard headline for what this meme means — not the lens name.
+- "provocativePoints": 1–2 strings. The two sharpest plain-language claims; under 22 words each; no hedging.
 
 Section rules:
 - First section: prose with one **bold** summary sentence, then one paragraph of two or three sentences.

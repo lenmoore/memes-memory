@@ -34,3 +34,211 @@ article p {
 .manuscript-artifact-enter {
   animation: manuscript-fade-in 0.55s ease forwards;
 }
+
+/* Illuminated folio summary (title + margin miniatures + gloss) */
+
+.reading-folio {
+  --folio-ink: #1a1612;
+  --folio-parchment: #f3ecdf;
+  --folio-parchment-deep: #e8dfd0;
+  --folio-rubric: #6b2c2c;
+  --folio-rule: #2a2420;
+}
+
+.reading-folio-inner {
+  position: relative;
+  border: 2px solid var(--folio-rule);
+  background: linear-gradient(
+    165deg,
+    var(--folio-parchment) 0%,
+    #ebe3d4 48%,
+    var(--folio-parchment-deep) 100%
+  );
+  padding: 1.5rem 1.75rem 1.75rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+    4px 6px 0 rgba(26, 22, 18, 0.07);
+}
+
+.reading-folio-inner::before,
+.reading-folio-inner::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--folio-rule);
+  border-style: solid;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.reading-folio-inner::before {
+  top: 10px;
+  left: 10px;
+  border-width: 2px 0 0 2px;
+}
+
+.reading-folio-inner::after {
+  bottom: 10px;
+  right: 10px;
+  border-width: 0 2px 2px 0;
+}
+
+.reading-rubric {
+  font-family: var(--font-jacquard-12), Georgia, serif;
+  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  line-height: 1.05;
+  color: var(--folio-ink);
+  text-align: left;
+  max-width: 28em;
+  margin: 0 0 0.35rem;
+}
+
+.reading-folio-fleuron {
+  text-align: center;
+  color: var(--folio-rubric);
+  font-size: 1.1rem;
+  line-height: 1;
+  margin: 0.5rem 0 1.1rem;
+  opacity: 0.85;
+}
+
+.reading-folio-body {
+  display: block;
+}
+
+.reading-folio-body--with-margin {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 1.35rem 1.75rem;
+  align-items: start;
+}
+
+.reading-margin-column {
+  width: 152px;
+  flex-shrink: 0;
+}
+
+.reading-miniature-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.reading-miniature-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.reading-miniature-rule {
+  height: 1px;
+  margin: 0.65rem 0.35rem;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--folio-rule) 12%,
+    var(--folio-rule) 88%,
+    transparent
+  );
+  opacity: 0.35;
+}
+
+.reading-miniature {
+  margin: 0;
+  width: 152px;
+  height: 203px;
+  border: 2px solid var(--folio-ink);
+  padding: 3px;
+  background: var(--folio-parchment-deep);
+  box-shadow: 2px 3px 0 rgba(26, 22, 18, 0.08);
+}
+
+.reading-miniature-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.reading-miniature-placeholder {
+  display: flex;
+  height: 100%;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b6358;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.reading-gloss-column {
+  min-width: 0;
+  padding-top: 0.15rem;
+  border-left: 1px solid rgba(42, 36, 32, 0.12);
+  padding-left: 1.25rem;
+}
+
+.reading-folio-body:not(.reading-folio-body--with-margin) .reading-gloss-column {
+  border-left: none;
+  padding-left: 0;
+}
+
+.reading-gloss-line {
+  font-family: var(--font-bokor), Georgia, serif;
+  font-size: 1.12rem;
+  line-height: 1.45;
+  color: var(--folio-ink);
+  margin: 0 0 1rem;
+  text-indent: 0;
+}
+
+.reading-gloss-line:last-child {
+  margin-bottom: 0;
+}
+
+.reading-gloss-line-first {
+  text-indent: 0;
+}
+
+.reading-gloss-initial {
+  float: left;
+  font-family: var(--font-jacquard-12), Georgia, serif;
+  font-size: 3.1rem;
+  line-height: 0.78;
+  margin: 0.08rem 0.35rem 0 0;
+  color: var(--folio-rubric);
+}
+
+@media (max-width: 520px) {
+  .reading-folio-body--with-margin {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .reading-margin-column {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .reading-miniature-stack {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+
+  .reading-miniature-rule {
+    display: none;
+  }
+
+  .reading-gloss-column {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid rgba(42, 36, 32, 0.12);
+    padding-top: 1rem;
+  }
+}

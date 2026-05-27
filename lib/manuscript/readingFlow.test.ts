@@ -18,6 +18,8 @@ const fixedMeasure = (value: string) => value.length * 8;
 
 function sampleReading(): LensReading {
   return {
+    title: "Sample reading title",
+    provocativePoints: ["First provocative claim.", "Second claim."],
     sections: [
       {
         type: "prose",
@@ -110,6 +112,8 @@ describe("computeManuscriptLayout", () => {
 describe("layoutReading", () => {
   it("keeps text lines out of embed columns in rails mode", () => {
     const reading: LensReading = {
+      title: "",
+      provocativePoints: [],
       sections: [
         {
           type: "prose",
@@ -149,6 +153,8 @@ describe("layoutReading", () => {
 
   it("stacks artifacts below text on narrow viewports", () => {
     const reading: LensReading = {
+      title: "",
+      provocativePoints: [],
       sections: [
         {
           type: "prose",
@@ -183,6 +189,8 @@ describe("layoutReading", () => {
 
   it("centers stacked artifacts within the canvas", () => {
     const reading: LensReading = {
+      title: "",
+      provocativePoints: [],
       sections: [
         { type: "prose", markdown: "Text before stacked images." },
         {

@@ -4,12 +4,8 @@ import { join } from "node:path";
 import { getClient } from "@/lib/anthropic";
 import { resolveImageMediaTypeFromBase64 } from "@/lib/imageMediaType";
 import { getLens } from "@/lib/lenses/registry";
-import {
-  lensReadingToPlainText,
-  markdownToFallbackReading,
-  parseLensReading,
-  type LensReading,
-} from "@/lib/lenses/reading";
+import { lensReadingToPlainText } from "@/lib/lenses/reading";
+import { parseReadingResponse } from "@/lib/lenses/parseReadingResponse";
 import {
   buildReadingJsonFormat,
   buildSynthesisReadingJsonFormat,
@@ -25,27 +21,6 @@ type LensRequest = {
   webContext?: string | null;
   priorOutputs?: { historical?: string; semiotic?: string };
 };
-
-function extractJson(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) {
-    return text.slice(start, end + 1);
-  }
-  return text.trim();
-}
-
-function parseReadingResponse(text: string): LensReading {
-  try {
-    const parsed = parseLensReading(JSON.parse(extractJson(text)));
-    if (parsed) return parsed;
-  } catch {
-    // fall through
-  }
-  return markdownToFallbackReading(text);
-}
 
 export async function POST(
   req: Request,
@@ -145,7 +120,7 @@ ${buildReadingJsonFormat(lens)}`,
 
   const message = await client.messages.create({
     model,
-    max_tokens: 1000,
+    max_tokens: 2048,
     system,
     messages: [{ role: "user", content: userContent }],
   });
@@ -155,7 +130,18 @@ ${buildReadingJsonFormat(lens)}`,
     .map((b) => b.text)
     .join("");
 
-  const reading = parseReadingResponse(text);
+  const truncated = message.stop_reason === "max_tokens";
+  const parsed = parseReadingResponse(text, { truncated });
+
+  if (!parsed.ok) {
+    const detail =
+      parsed.reason === "truncated"
+        ? "Model response was cut off before JSON finished. Try regenerate."
+        : "Could not parse lens reading JSON.";
+    return Response.json({ error: detail }, { status: 422 });
+  }
+
+  const reading = parsed.reading;
 
   return Response.json({
     reading,
