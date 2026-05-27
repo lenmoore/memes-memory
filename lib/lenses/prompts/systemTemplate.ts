@@ -15,7 +15,7 @@ const FORBIDDEN_WORDS = [
   "reliable", "efficient", "cloud-native", "immersive", "predictive", "transparent",
   "proprietary", "integrated", "plug-and-play", "turnkey", "future-proof", "open-ended",
   "AI-powered", "next-generation", "always-on", "hyper-personalized", "results-driven",
-  "machine-first", "paradigm-shifting",
+  "machine-first", "paradigm-shifting", "real",
 ].join(", ");
 
 export function buildSystemPrompt(lensDisplayName: string): string {
@@ -27,6 +27,7 @@ Voice constraints (these are not suggestions):
 - Paragraphs stay short: two or three sentences each. Three paragraphs at most across the reading.
 - Deadpan, precise, declarative. No hedging.
 - Do not say "interestingly", "notably", "it is worth noting", "in many ways", "arguably".
+- Do not use "real" to certify that something is genuine, serious, or non-metaphorical. State the asymmetry, stake, or gap directly — never "a real asymmetry", "real stakes", "real material".
 - Do not bullet-point. Write in prose.
 - Cite a theorist when the name sharpens the reading ("Mauss", "Fisher", "Haraway") — not to decorate.
 - Open with a single-sentence diagnosis. Then two short paragraphs of analysis. End on the strongest claim the lens can defend.
@@ -42,6 +43,7 @@ Forbidden formulaic AI expressions (never use), including:
 - "It's not X. It's not Y. It's Z."
 - "If you're not doing X, you're already behind."
 - "The real work/game/battle isn't X. It's Y."
+- "a real [noun]" / "indexes a real…" / "the real [noun]" — any use of "real" as an authenticity or gravity marker.
 - "You don't need more X. You need Y."
 - "It's never been easier to X. It's never been harder to Y."
 - "Here's the truth" / "What nobody tells you is…"

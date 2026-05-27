@@ -23,7 +23,9 @@ type Props = {
   displayName: string;
   inputs: LensRunInputs | null;
   primerPath: string | null;
+  generateImages?: boolean;
   onComplete?: (reading: LensReading) => void;
+  onDisplaySettled?: () => void;
 };
 
 export default function LensPanel({
@@ -31,7 +33,9 @@ export default function LensPanel({
   displayName,
   inputs,
   primerPath,
+  generateImages = false,
   onComplete,
+  onDisplaySettled,
 }: Props) {
   const [reading, setReading] = useState<LensReading | null>(null);
   const [displaySettled, setDisplaySettled] = useState(false);
@@ -181,7 +185,11 @@ export default function LensPanel({
         {reading && (
           <ManuscriptReading
             reading={reading}
-            onSettled={() => setDisplaySettled(true)}
+            generateImages={generateImages}
+            onSettled={() => {
+              setDisplaySettled(true);
+              onDisplaySettled?.();
+            }}
           />
         )}
         {status === "starting" && <PulsingDot />}

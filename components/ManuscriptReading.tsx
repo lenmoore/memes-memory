@@ -17,6 +17,7 @@ import type { LensReading } from "@/lib/lenses/reading";
 
 type Props = {
   reading: LensReading;
+  generateImages?: boolean;
   onSettled?: () => void;
 };
 
@@ -70,7 +71,11 @@ function computeContainerHeight(
   return height;
 }
 
-export default function ManuscriptReading({ reading, onSettled }: Props) {
+export default function ManuscriptReading({
+  reading,
+  generateImages = false,
+  onSettled,
+}: Props) {
   const measureRef = useRef<HTMLDivElement>(null);
   const [contentWidth, setContentWidth] = useState(640);
   const [revealedChars, setRevealedChars] = useState(0);
@@ -112,7 +117,7 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
 
   useEffect(() => {
     settledRef.current = false;
-  }, [reading]);
+  }, [reading, generateImages]);
 
   useEffect(() => {
     const node = measureRef.current;
@@ -169,6 +174,8 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
   }, [layoutCharCount, reading]);
 
   useEffect(() => {
+    if (!generateImages) return;
+
     let cancelled = false;
     const next: Record<string, ImageState> = {};
     const phases: Record<string, EmbedPhase> = {};
@@ -252,7 +259,7 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
       }
       settleTimersRef.current.clear();
     };
-  }, [flowInput.artifacts, reading]);
+  }, [flowInput.artifacts, reading, generateImages]);
 
   const visibleLines = useMemo(
     () => (fullLayout ? buildVisibleLines(fullLayout.lines, revealedChars) : []),
@@ -280,15 +287,17 @@ export default function ManuscriptReading({ reading, onSettled }: Props) {
 
   const embedsSettled =
     flowInput.embeds.length === 0 ||
-    flowInput.embeds.every((embed) => {
-      const phase = embedPhases[embed.id];
-      const image = images[embed.id];
-      return (
-        phase === "inFlow" ||
-        image?.status === "skipped" ||
-        image?.status === "error"
-      );
-    });
+    (!generateImages
+      ? false
+      : flowInput.embeds.every((embed) => {
+          const phase = embedPhases[embed.id];
+          const image = images[embed.id];
+          return (
+            phase === "inFlow" ||
+            image?.status === "skipped" ||
+            image?.status === "error"
+          );
+        }));
 
   const animationSettled = typewriterDone && embedsSettled;
   const allowReflowTransition = animationSettled;

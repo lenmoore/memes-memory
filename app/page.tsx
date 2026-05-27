@@ -10,6 +10,10 @@ import type { LensReading } from "@/lib/lenses/reading";
 import { lensReadingToPlainText } from "@/lib/lenses/reading";
 import type { Recognition } from "@/lib/recognition";
 import { evaluateMemeGate } from "@/lib/memeGate";
+import {
+  shouldGenerateImages,
+  shouldRunScreen2Lenses,
+} from "@/lib/manuscript/imagePipeline";
 
 type KymPayload = {
   result: {
@@ -83,6 +87,7 @@ export default function Page() {
   const [lensOutputs, setLensOutputs] = useState<Record<string, LensReading>>(
     {},
   );
+  const [lensSettled, setLensSettled] = useState<Record<string, boolean>>({});
   const [activeScreen, setActiveScreen] = useState<1 | 2 | 3>(1);
 
   const [selectedScreen2Ids, setSelectedScreen2Ids] = useState<string[] | null>(
@@ -117,6 +122,7 @@ export default function Page() {
     setReverseSearchError(null);
     setReverseSearchStatus("idle");
     setLensOutputs({});
+    setLensSettled({});
     setActiveScreen(1);
     setSelectedScreen2Ids(null);
     setLensSelectionRationale(null);
@@ -207,6 +213,12 @@ export default function Page() {
     Boolean(lensOutputs["semiotic"]) &&
     Boolean(lensOutputs["synthesis"]);
 
+  const screen1AllSettled =
+    screen1Complete &&
+    Boolean(lensSettled["historical"]) &&
+    Boolean(lensSettled["semiotic"]) &&
+    Boolean(lensSettled["synthesis"]);
+
   const screen2Lenses = useMemo(() => {
     const all = getLensesForScreen(2);
     if (!selectedScreen2Ids) return [];
@@ -220,7 +232,9 @@ export default function Page() {
 
   function screenPipelineReady(screenNum: 1 | 2 | 3): boolean {
     if (screenNum === 1) return screen1Ready;
-    if (screenNum === 2) return screen1Complete && selectedScreen2Ids !== null;
+    if (screenNum === 2) {
+      return shouldRunScreen2Lenses(screen1AllSettled, selectedScreen2Ids);
+    }
     return screen2Complete;
   }
 
@@ -342,7 +356,10 @@ export default function Page() {
       };
     }
     if (lens.screen === 2) {
-      if (!screen1Complete || !selectedScreen2Ids?.includes(lens.id)) {
+      if (
+        !shouldRunScreen2Lenses(screen1AllSettled, selectedScreen2Ids) ||
+        !selectedScreen2Ids?.includes(lens.id)
+      ) {
         return null;
       }
     }
@@ -359,7 +376,21 @@ export default function Page() {
 
   const handleLensComplete = (id: string) => (output: LensReading) => {
     setLensOutputs((prev) => ({ ...prev, [id]: output }));
+    setLensSettled((prev) => ({ ...prev, [id]: false }));
   };
+
+  const imagePipelineContext = {
+    screen1TextComplete: screen1Complete,
+    screen1DisplaySettled: screen1AllSettled,
+    screen2TextComplete: screen2Complete,
+  };
+
+  function generateImagesForLens(lens: Lens): boolean {
+    return shouldGenerateImages(lens.screen, {
+      ...imagePipelineContext,
+      lensHasReading: Boolean(lensOutputs[lens.id]),
+    });
+  }
 
   return (
     <main className="mx-auto max-w-3xl overflow-x-visible px-6 py-16">
@@ -535,6 +566,14 @@ export default function Page() {
                     <ProgressDots /> waiting for screen 1 before choosing lenses
                   </p>
                 )}
+                {screenNum === 2 &&
+                  screen1Complete &&
+                  !screen1AllSettled &&
+                  lensSelectionStatus !== "waiting" && (
+                    <p className="text-neutral-500 italic -mt-4 mb-6">
+                      <ProgressDots /> waiting for screen 1 images before critical lenses
+                    </p>
+                  )}
                 {screenNum === 2 && lensSelectionStatus === "running" && (
                   <p className="text-neutral-500 italic -mt-4 mb-6">
                     <ProgressDots /> choosing lenses for this meme
@@ -567,7 +606,11 @@ export default function Page() {
                         displayName={lens.displayName}
                         primerPath={lens.primerPath}
                         inputs={inputsForLens(lens)}
+                        generateImages={generateImagesForLens(lens)}
                         onComplete={handleLensComplete(lens.id)}
+                        onDisplaySettled={() =>
+                          setLensSettled((prev) => ({ ...prev, [lens.id]: true }))
+                        }
                       />
                     </div>
                   ))}
