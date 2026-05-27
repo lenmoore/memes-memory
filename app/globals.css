@@ -15,7 +15,7 @@ article p {
   margin-bottom: 1rem;
 }
 
-/* Manuscript layout via pretext-flow */
+/* Manuscript column layout */
 .manuscript-reading {
   overflow: visible;
 }

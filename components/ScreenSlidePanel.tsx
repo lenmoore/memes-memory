@@ -3,6 +3,7 @@
 type Props = {
   activeScreen: 1 | 2 | 3;
   onScreenChange: (screen: 1 | 2 | 3) => void;
+  position?: "top" | "bottom";
 };
 
 const SCREEN_NAMES: Record<1 | 2 | 3, string> = {
@@ -14,6 +15,7 @@ const SCREEN_NAMES: Record<1 | 2 | 3, string> = {
 export default function ScreenSlidePanel({
   activeScreen,
   onScreenChange,
+  position = "top",
 }: Props) {
   function goPrev() {
     if (activeScreen > 1) onScreenChange((activeScreen - 1) as 1 | 2 | 3);
@@ -25,7 +27,11 @@ export default function ScreenSlidePanel({
 
   return (
     <nav
-      className="sticky top-0 z-10 -mx-6 mb-10 border-y border-neutral-300 bg-white/95 px-6 py-4 backdrop-blur-sm"
+      className={
+        position === "top"
+          ? "sticky top-0 z-10 -mx-6 mb-10 border-y border-neutral-300 bg-white/95 px-6 py-4 backdrop-blur-sm"
+          : "z-10 -mx-6 mt-10 border-t border-neutral-300 bg-white px-6 py-4"
+      }
       aria-label="Screen navigation"
     >
       <div className="flex items-center justify-between gap-4">

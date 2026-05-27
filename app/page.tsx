@@ -617,6 +617,11 @@ export default function Page() {
               </Screen>
             </div>
           ))}
+          <ScreenSlidePanel
+            activeScreen={activeScreen}
+            onScreenChange={setActiveScreen}
+            position="bottom"
+          />
         </>
       )}
     </main>

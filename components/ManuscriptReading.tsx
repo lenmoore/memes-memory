@@ -1,17 +1,16 @@
 "use client";
 
-import { flowLayout, type FlowResult } from "pretext-flow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  buildReadingFlow,
+  buildReadingContent,
   buildVisibleLines,
   computeManuscriptLayout,
   EMBED_SETTLE_MS,
-  embedsForLayout,
   layoutCharacterCount,
+  layoutReading,
+  readingArtifacts,
   TYPEWRITER_CHARS_PER_SECOND,
   visualEmbedFrame,
-  type ManuscriptLayout,
 } from "@/lib/manuscript/readingFlow";
 import type { LensReading } from "@/lib/lenses/reading";
 
@@ -28,47 +27,19 @@ type ImageState = {
 
 type EmbedPhase = "loading" | "visible" | "inFlow";
 
-function runFlowLayout(
-  flowInput: ReturnType<typeof buildReadingFlow>,
-  manuscriptLayout: ManuscriptLayout,
-  text: string,
-  embedIds: Set<string>,
-): FlowResult | null {
-  if (!text.trim() && embedIds.size === 0) return null;
-
-  const embeds = embedsForLayout(
-    flowInput.embeds.filter((embed) => embedIds.has(embed.id)),
-    manuscriptLayout,
-  );
-  return flowLayout({
-    text,
-    font: flowInput.font,
-    width: manuscriptLayout.canvasWidth,
-    lineHeight: flowInput.lineHeight,
-    embeds,
-    paragraphGap: flowInput.paragraphGap,
-  });
-}
-
-function computeContainerHeight(
-  layout: FlowResult | null,
-  flowInput: ReturnType<typeof buildReadingFlow>,
-  sideById: Map<string, "left" | "right">,
-  manuscriptLayout: ManuscriptLayout,
-): number {
-  let height = layout?.height ?? 120;
-
-  if (!layout) return height;
-
-  for (const embed of flowInput.embeds) {
-    const resolved = layout.embeds.find((item) => item.id === embed.id);
-    if (!resolved) continue;
-    const side = sideById.get(embed.id) ?? "left";
-    const frame = visualEmbedFrame(side, resolved.rect, manuscriptLayout);
-    height = Math.max(height, frame.top + frame.height);
+function createTextMeasurer(font: string): (value: string) => number {
+  if (typeof document === "undefined") {
+    return (value: string) => value.length * 9;
   }
 
-  return height;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return (value: string) => value.length * 9;
+  }
+
+  ctx.font = font;
+  return (value: string) => ctx.measureText(value).width;
 }
 
 export default function ManuscriptReading({
@@ -88,29 +59,31 @@ export default function ManuscriptReading({
   );
   const settledRef = useRef(false);
 
-  const flowInput = useMemo(() => buildReadingFlow(reading), [reading]);
-  const allEmbedIds = useMemo(
-    () => new Set(flowInput.embeds.map((embed) => embed.id)),
-    [flowInput.embeds],
+  const readingContent = useMemo(() => buildReadingContent(reading), [reading]);
+  const artifacts = useMemo(
+    () => readingArtifacts(readingContent),
+    [readingContent],
   );
+  const layoutArtifacts = generateImages ? artifacts : [];
 
   const manuscriptLayout = useMemo(
-    () => computeManuscriptLayout(contentWidth, flowInput.artifacts),
-    [contentWidth, flowInput.artifacts],
+    () => computeManuscriptLayout(contentWidth, layoutArtifacts),
+    [contentWidth, layoutArtifacts],
+  );
+
+  const measureText = useMemo(
+    () => createTextMeasurer(readingContent.font),
+    [readingContent.font],
   );
 
   const fullLayout = useMemo(
-    () =>
-      runFlowLayout(flowInput, manuscriptLayout, flowInput.text, allEmbedIds),
-    [flowInput, manuscriptLayout, allEmbedIds],
+    () => layoutReading(readingContent, manuscriptLayout, measureText),
+    [readingContent, manuscriptLayout, measureText],
   );
 
   const layoutCharCount = useMemo(
-    () =>
-      fullLayout
-        ? layoutCharacterCount(fullLayout.lines)
-        : flowInput.text.replace(/\n/g, "").length,
-    [fullLayout, flowInput.text],
+    () => layoutCharacterCount(fullLayout.lines),
+    [fullLayout.lines],
   );
 
   const typewriterDone = revealedChars >= layoutCharCount;
@@ -180,14 +153,14 @@ export default function ManuscriptReading({
     const next: Record<string, ImageState> = {};
     const phases: Record<string, EmbedPhase> = {};
 
-    for (const artifact of flowInput.artifacts) {
+    for (const artifact of artifacts) {
       next[artifact.id] = { status: "loading", url: null };
       phases[artifact.id] = "loading";
     }
     setImages(next);
     setEmbedPhases(phases);
 
-    for (const artifact of flowInput.artifacts) {
+    for (const artifact of artifacts) {
       (async () => {
         try {
           const res = await fetch("/api/generate/artifact", {
@@ -259,39 +232,20 @@ export default function ManuscriptReading({
       }
       settleTimersRef.current.clear();
     };
-  }, [flowInput.artifacts, reading, generateImages]);
+  }, [artifacts, reading, generateImages]);
 
   const visibleLines = useMemo(
-    () => (fullLayout ? buildVisibleLines(fullLayout.lines, revealedChars) : []),
-    [fullLayout, revealedChars],
-  );
-
-  const sideById = useMemo(() => {
-    const map = new Map<string, "left" | "right">();
-    for (const artifact of flowInput.artifacts) {
-      map.set(artifact.id, artifact.side);
-    }
-    return map;
-  }, [flowInput.artifacts]);
-
-  const layoutHeight = useMemo(
-    () =>
-      computeContainerHeight(
-        fullLayout,
-        flowInput,
-        sideById,
-        manuscriptLayout,
-      ),
-    [fullLayout, flowInput, sideById, manuscriptLayout],
+    () => buildVisibleLines(fullLayout.lines, revealedChars),
+    [fullLayout.lines, revealedChars],
   );
 
   const embedsSettled =
-    flowInput.embeds.length === 0 ||
+    artifacts.length === 0 ||
     (!generateImages
       ? false
-      : flowInput.embeds.every((embed) => {
-          const phase = embedPhases[embed.id];
-          const image = images[embed.id];
+      : artifacts.every((artifact) => {
+          const phase = embedPhases[artifact.id];
+          const image = images[artifact.id];
           return (
             phase === "inFlow" ||
             image?.status === "skipped" ||
@@ -300,7 +254,6 @@ export default function ManuscriptReading({
         }));
 
   const animationSettled = typewriterDone && embedsSettled;
-  const allowReflowTransition = animationSettled;
 
   useEffect(() => {
     if (!animationSettled || settledRef.current) return;
@@ -320,33 +273,29 @@ export default function ManuscriptReading({
       <div
         className="relative"
         style={{
-          height: layoutHeight,
-          minHeight: layoutHeight,
+          height: fullLayout.height,
+          minHeight: fullLayout.height,
           width: manuscriptLayout.canvasWidth,
           marginLeft: manuscriptLayout.canvasOffset,
         }}
       >
-        {flowInput.embeds.map((embed) => {
+        {fullLayout.embeds.map((embed) => {
           const phase = embedPhases[embed.id] ?? "loading";
           const image = images[embed.id];
-          const side = sideById.get(embed.id) ?? "left";
           const visible = phase === "visible" || phase === "inFlow";
-          const rectSource = fullLayout?.embeds.find(
-            (item) => item.id === embed.id,
+
+          if (!visible) return null;
+
+          const frame = visualEmbedFrame(
+            embed.side,
+            embed,
+            manuscriptLayout,
           );
-
-          if (!rectSource || !visible) return null;
-
-          const frame = visualEmbedFrame(side, rectSource.rect, manuscriptLayout);
 
           return (
             <div
               key={embed.id}
-              className={`absolute z-10 pointer-events-none manuscript-artifact-enter ${
-                allowReflowTransition
-                  ? "transition-[top,left,width] duration-500 ease-out"
-                  : ""
-              }`}
+              className="absolute z-10 pointer-events-none manuscript-artifact-enter"
               style={{
                 left: frame.left,
                 top: frame.top,
@@ -376,17 +325,13 @@ export default function ManuscriptReading({
           <span
             key={`${line.y}:${line.x}:${line.text}`}
             className={`absolute z-20 block whitespace-nowrap text-neutral-900 ${
-              allowReflowTransition
-                ? "transition-[top,left,width] duration-500 ease-out"
-                : ""
-            } ${
-              flowInput.boldLines.has(line.text.trim())
+              readingContent.boldLines.has(line.text.trim())
                 ? "text-neutral-950"
                 : ""
             }`}
             style={{
-              font: flowInput.font,
-              lineHeight: `${flowInput.lineHeight}px`,
+              font: readingContent.font,
+              lineHeight: `${readingContent.lineHeight}px`,
               left: line.x,
               top: line.y,
               width: line.width,
